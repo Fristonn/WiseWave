@@ -172,6 +172,70 @@ export interface SponsorSegment {
   UUID: string;
 }
 
+export interface SpotifyAccountStatus {
+  linked: boolean;
+  display_name: string;
+  image_url: string;
+}
+
+export interface SpotifyImportResult {
+  source_id: string;
+  title: string;
+  cover_url: string;
+  liked: boolean;
+  tracks: Track[];
+  matched: number;
+  failed: number;
+  total: number;
+}
+
+export interface SpotifyImportStatus {
+  phase: string;
+  source_id: string;
+  title: string;
+  done: number;
+  total: number;
+  matched: number;
+  error: string;
+}
+
+export interface SpotifyLibraryPlaylist {
+  id: string;
+  name: string;
+  owner: string;
+  image_url: string;
+  track_count: number;
+}
+
+export interface SpotifyLibrarySnapshot {
+  display_name: string;
+  user_id: string;
+  email: string;
+  image_url: string;
+  product: string;
+  country: string;
+  liked_songs: number;
+  playlist_count: number;
+  playlists: SpotifyLibraryPlaylist[];
+}
+
+export interface SpotifyLoginConnection {
+  status: SpotifyAccountStatus;
+  generation: number;
+}
+
+export interface SpotifySyncStatus {
+  phase: string;
+  label: string;
+  display_name: string;
+  image_url: string;
+  playlists_loaded: number;
+  playlist_total: number;
+  liked_songs: number;
+  error: string;
+  library: SpotifyLibrarySnapshot | null;
+}
+
 export interface Syllable {
   is_background?: boolean;
   append_to_previous?: boolean;
@@ -365,6 +429,54 @@ export const MediaSession = {
   },
 } as const;
 
+export const SpotifyAccount = {
+  connect(spDc: string, spKey: string): Promise<SpotifyAccountStatus> {
+    return call("SpotifyAccount.Connect", spDc, spKey);
+  },
+  connectForLogin(spDc: string, spKey: string): Promise<SpotifyLoginConnection> {
+    return call("SpotifyAccount.ConnectForLogin", spDc, spKey);
+  },
+  disconnect(): Promise<void> {
+    return call("SpotifyAccount.Disconnect");
+  },
+  disconnectIf(spDc: string, epoch: number): Promise<boolean> {
+    return call("SpotifyAccount.DisconnectIf", spDc, epoch);
+  },
+  import(sourceID: string): Promise<SpotifyImportResult> {
+    return call("SpotifyAccount.Import", sourceID);
+  },
+  importStatus(): Promise<SpotifyImportStatus> {
+    return call("SpotifyAccount.ImportStatus");
+  },
+  library(): Promise<SpotifyLibrarySnapshot | null> {
+    return call("SpotifyAccount.Library");
+  },
+  status(): Promise<SpotifyAccountStatus> {
+    return call("SpotifyAccount.Status");
+  },
+  syncLibrary(): Promise<SpotifySyncStatus> {
+    return call("SpotifyAccount.SyncLibrary");
+  },
+  syncStatus(): Promise<SpotifySyncStatus> {
+    return call("SpotifyAccount.SyncStatus");
+  },
+} as const;
+
+export const SpotifyLogin = {
+  busy(): Promise<boolean> {
+    return call("SpotifyLogin.Busy");
+  },
+  cancel(): Promise<void> {
+    return call("SpotifyLogin.Cancel");
+  },
+  logout(): Promise<void> {
+    return call("SpotifyLogin.Logout");
+  },
+  start(): Promise<void> {
+    return call("SpotifyLogin.Start");
+  },
+} as const;
+
 export const Clipboard = {
   writeText(text: string): Promise<void> {
     return call("Clipboard.WriteText", text);
@@ -376,6 +488,9 @@ export const Clipboard = {
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   mediaAction: event<string>("media-action"),
+  spotifyAccountChanged: event<boolean>("spotify-account-changed"),
+  spotifyLibrarySyncChanged: event<SpotifySyncStatus>("spotify-library-sync-changed"),
+  spotifyImportChanged: event<SpotifyImportStatus>("spotify-import-changed"),
   trayAction: event<string>("tray-action"),
   playerFullscreenChanged: event<boolean>("player-fullscreen-changed"),
 } as const;
