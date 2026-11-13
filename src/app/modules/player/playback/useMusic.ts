@@ -41,6 +41,17 @@ function readCurrentTrack(): Track | null {
   return null;
 }
 
+const collectionStateKey = "wisewave-playback-collection";
+
+function readCollectionState(trackID: string): { tracks: Track[]; next: Track[] } | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(collectionStateKey) || "null");
+    const valid = (item: Track) => item && typeof item.id === "string" && typeof item.title === "string" && typeof item.artist === "string";
+    if (saved?.trackID !== trackID || !Array.isArray(saved.tracks) || !saved.tracks.length || !Array.isArray(saved.next) || !saved.tracks.every(valid) || !saved.next.every(valid)) return null;
+    return { tracks: saved.tracks, next: saved.next };
+  } catch { return null; }
+}
+
 function readHistory(): Track[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem("wisewave-history") || "[]");
@@ -84,6 +95,8 @@ export function useMusic() {
     catch { return false; }
   });
   const forYouSequence = useRef(false);
+  const collectionSequence = useRef(false);
+  const collectionTracks = useRef<Track[]>([]);
   const [playing, setPlaying] = useState(false);
   const [trackLoading, setTrackLoading] = useState(false);
   const [buffering, setBuffering] = useState(false);
@@ -152,10 +165,13 @@ export function useMusic() {
     try { return localStorage.getItem("wisewave-private-listening") === "true"; }
     catch { return false; }
   });
+  const privateListeningRef = useRef(privateListening);
+  privateListeningRef.current = privateListening;
   const discordSync = useRef<Promise<void>>(Promise.resolve());
   const discordVersion = useRef(0);
   const togglePrivateListening = () => {
-    const next = !privateListening;
+    const next = !privateListeningRef.current;
+    privateListeningRef.current = next;
     setPrivateListening(next);
     try { localStorage.setItem("wisewave-private-listening", String(next)); }
     catch { setError("Private listening preference could not be saved."); }
@@ -265,11 +281,13 @@ export function useMusic() {
     return () => { active = false; };
   }, [history, track?.id, forYouRetry]);
 
-  const play = useCallback((item: Track, list: Track[] = [item], options?: { fromPrevious?: boolean; forYou?: boolean }) => {
+  const play = useCallback((item: Track, list: Track[] = [item], options?: { fromPrevious?: boolean; forYou?: boolean; collection?: boolean; continueCollection?: boolean }) => {
     const current = trackRef.current;
     const playList = list.length ? list : [item];
     const index = Math.max(0, playList.findIndex((entry) => entry.id === item.id));
     if (!options?.fromPrevious) forYouSequence.current = options?.forYou === true;
+    if (!options?.fromPrevious) collectionSequence.current = options?.collection === true;
+    if (options?.collection && !options.continueCollection) collectionTracks.current = playList;
     if (!options?.fromPrevious) {
       if (index > 0) {
         previousStackRef.current = playList.slice(0, index);
@@ -296,7 +314,13 @@ export function useMusic() {
     upNextRef.current = playList.slice(index + 1);
     setUpNext(upNextRef.current);
     setError("");
-    if (readPlaybackSettings().resume !== false) { try { localStorage.setItem("wisewave-current-track", JSON.stringify(item)); } catch {} }
+    if (readPlaybackSettings().resume !== false) {
+      try {
+        localStorage.setItem("wisewave-current-track", JSON.stringify(item));
+        if (collectionSequence.current) localStorage.setItem(collectionStateKey, JSON.stringify({ trackID: item.id, tracks: collectionTracks.current, next: upNextRef.current }));
+        else localStorage.removeItem(collectionStateKey);
+      } catch {}
+    }
   }, []);
 
   useEffect(() => {
@@ -311,8 +335,19 @@ export function useMusic() {
     void Playback.state().then((state) => {
       if (!active || playbackVersion.current !== version) return;
       const cached = readPlaybackSettings().resume === false ? null : readCurrentTrack();
+      const restoreCollection = (current: Track) => {
+        if (readPlaybackSettings().resume === false) return;
+        const saved = readCollectionState(current.id);
+        if (!saved) return;
+        collectionSequence.current = true;
+        collectionTracks.current = saved.tracks;
+        playbackListRef.current = saved.tracks;
+        upNextRef.current = saved.next;
+        setUpNext(saved.next);
+      };
       if (!state.track_id) {
         if (!cached) return;
+        restoreCollection(cached);
         const savedPosition = Number(localStorage.getItem("wisewave-current-position"));
         const position = Number.isFinite(savedPosition) ? Math.max(0, savedPosition) : 0;
         pendingRestore.current = { id: cached.id, position };
@@ -342,6 +377,7 @@ export function useMusic() {
         ? cached
         : readHistory().find((item) => item.id === state.track_id);
       if (!current) return;
+      restoreCollection(current);
       restoredTrack.current = current;
       setTrack(current);
       setPlaying(state.playing);
@@ -422,6 +458,8 @@ export function useMusic() {
       setMixTracks([]);
       return;
     }
+    mixTracksRef.current = [];
+    setMixTracks([]);
     let active = true;
     const req = Music.related(track.id);
     relatedRef.current = { id: track.id, tracks: req };
@@ -440,7 +478,7 @@ export function useMusic() {
     if (!items[index]) return;
     queueRef.current = items.slice(index + 1);
     setQueue(queueRef.current);
-    play(items[index], [items[index], ...upNextRef.current.filter((item) => item.id !== items[index].id)], { forYou: forYouSequence.current });
+    play(items[index], [items[index], ...upNextRef.current.filter((item) => item.id !== items[index].id)], { forYou: forYouSequence.current, collection: collectionSequence.current, continueCollection: true });
   };
   const next = async () => {
     const version = playbackVersion.current;
@@ -450,12 +488,22 @@ export function useMusic() {
         const items = queueRef.current;
         queueRef.current = [...items.slice(1), track];
         setQueue(queueRef.current);
-        play(items[0], [items[0], ...queueRef.current]);
+        play(items[0], [items[0], ...upNextRef.current], { collection: collectionSequence.current, forYou: forYouSequence.current, continueCollection: true });
         return;
       }
       playQueued(0);
       return;
     }
+    if (collectionSequence.current && upNextRef.current.length) {
+      play(upNextRef.current[0], upNextRef.current, { collection: true, continueCollection: true });
+      return;
+    }
+    if (collectionSequence.current && mode === "queue" && track) {
+      const list = collectionTracks.current.length ? collectionTracks.current : [track];
+      play(list[0], list, { collection: true, continueCollection: true });
+      return;
+    }
+    if (collectionSequence.current) return;
     if (autoplay && track) {
       const recommendations = mixTracksRef.current.filter((item) => item.id && hasArtworkURL(item.album_art_url));
       const index = recommendations.findIndex((item) => item.id === track.id);
@@ -511,6 +559,18 @@ export function useMusic() {
     } finally { if (nextPending.current === version) nextPending.current = null; }
   };
   const shuffle = () => {
+    if (collectionSequence.current) {
+      const result = [...upNextRef.current];
+      for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
+      upNextRef.current = result;
+      setUpNext(result);
+      const currentIndex = collectionTracks.current.findIndex((item) => item.id === trackRef.current?.id);
+      collectionTracks.current = [...collectionTracks.current.slice(0, currentIndex + 1), ...result];
+      if (trackRef.current && readPlaybackSettings().resume !== false) {
+        try { localStorage.setItem(collectionStateKey, JSON.stringify({ trackID: trackRef.current.id, tracks: collectionTracks.current, next: result })); } catch {}
+      }
+      return;
+    }
     const queued = queueRef.current.length > 1;
     const result = [...(queued ? queueRef.current : upNextRef.current.length > 1 ? upNextRef.current : mixTracksRef.current.filter((item) => item.id !== trackRef.current?.id))];
     for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
@@ -574,6 +634,11 @@ export function useMusic() {
   const previous = () => {
     const current = trackRef.current;
     if (!current) return;
+    if (collectionSequence.current) {
+      const index = collectionTracks.current.findIndex((item) => item.id === current.id);
+      if (index > 0) play(collectionTracks.current[index - 1], collectionTracks.current, { collection: true, continueCollection: true });
+      return;
+    }
     let prev: Track | undefined;
     const stack = previousStackRef.current;
     if (stack.length) {
@@ -624,16 +689,18 @@ export function useMusic() {
     setPlaybackState((current) => current ? { ...current, playing: false, position: 0, buffer_ahead: 0 } : null);
   };
 
+
   useEffect(() => {
     if (!track || trackLoading) return;
     let active = true;
     let pending = false;
+    const playVersion = playbackVersion.current;
     const timer = window.setInterval(() => {
       const version = seekVersionRef.current;
-      if (seekPending.current || pending) return;
+      if (seekPending.current || pending || playbackVersion.current !== playVersion) return;
       pending = true;
       void Playback.state().then((state) => {
-        if (!active || seekPending.current || version !== seekVersionRef.current || state.track_id !== track.id) return;
+        if (!active || playbackVersion.current !== playVersion || seekPending.current || version !== seekVersionRef.current || state.track_id !== track.id) return;
         if (playing && state.playing && state.buffering && !state.error) {
           const stalled = bufferStall.current;
           if (!stalled || Math.abs(state.position - stalled.position) > 0.01) {
@@ -685,12 +752,17 @@ export function useMusic() {
     const index = recommendations.findIndex((item) => item.id === track?.id);
     const resume = forYouSequence.current ? upNext.find((item) => recommendations.some((candidate) => candidate.id === item.id)) : undefined;
     const recommendation = resume || (index >= 0 ? recommendations[index + 1] : recommendations[0]);
-    const nextID = queue[0]?.id || (autoplay ? recommendation?.id : upNext[0]?.id) || (autoplay ? mixNext?.id : undefined);
+    const nextID = queue[0]?.id || (collectionSequence.current
+      ? upNext[0]?.id || (repeatMode === "queue" ? collectionTracks.current[0]?.id : undefined)
+      : (autoplay ? recommendation?.id : upNext[0]?.id) || (autoplay ? mixNext?.id : undefined));
     void Playback.prefetch(playing && !trackLoading ? nextID || "" : "").catch(() => setError("Could not prepare the next track."));
-  }, [playing, trackLoading, track?.id, queue[0]?.id, upNext, autoplay, mixTracks, forYou, popular]);
+  }, [playing, trackLoading, track?.id, queue[0]?.id, upNext, autoplay, mixTracks, forYou, popular, repeatMode]);
 
   useEffect(() => {
-    const handleSettingsUpdate = () => setPlaybackSettings(readPlaybackSettings());
+    const handleSettingsUpdate = () => {
+      const next = readPlaybackSettings();
+      setPlaybackSettings(next);
+    };
     window.addEventListener("wisewave-settings-updated", handleSettingsUpdate);
     window.addEventListener("storage", handleSettingsUpdate);
     return () => {

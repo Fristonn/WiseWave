@@ -42,7 +42,7 @@ function readLastPage(): { page: Page; scroll: number } {
   const fallback: { page: Page; scroll: number } = { page: { view: "home" }, scroll: 0 };
   try {
     const saved = JSON.parse(localStorage.getItem(LAST_PAGE_KEY) || "null");
-    const page = saved?.page;
+    let page = saved?.page;
     if (!page || !["home", "search", "mix", "lyrics", "artist", "liked", "playlist", "album"].includes(page.view)) return fallback;
     if (page.view === "search" && typeof page.query !== "string") return fallback;
     if (page.view === "album" && typeof page.albumId !== "string") return fallback;
@@ -296,7 +296,7 @@ export function Player() {
     }, cached ? 0 : 350);
     return () => { active = false; window.clearTimeout(timer); };
   }, [query]);
-  return <PlaylistMenuProvider playlists={library.playlists} onEdit={library.edit} onDelete={(playlist) => { library.removePlaylist(playlist.id); if (page.view === "playlist" && page.playlistId === playlist.id) navigate({ view: "home" }); }} onPlay={(playlist) => { if (playlist.tracks.length) music.play(playlist.tracks[0], playlist.tracks); }} onQueue={(playlist) => music.setQueue((items) => [...items, ...playlist.tracks.filter((track, index, tracks) => !items.some((item) => item.id === track.id) && tracks.findIndex((item) => item.id === track.id) === index)])}><SongMenuProvider liked={library.liked} playlists={library.playlists} onLike={library.toggleLike} onAdd={library.add} onCreateAndAdd={(name, description, track, cover) => { const playlist = library.create(name, description, cover); library.add(playlist.id, track); }} onRemove={library.remove} onRemoveQueue={(index, track) => music.setQueue((items) => items[index]?.id === track.id ? items.filter((_, itemIndex) => itemIndex !== index) : items)} onQueue={(track) => music.setQueue((items) => items.some((item) => item.id === track.id) ? items : [...items, track])} onArtist={(track) => navigate({ view: "artist", artist: { artist: track.artist, artist_id: track.artist_id } })} onAlbum={(id) => navigate({ view: "album", albumId: id })} onRadio={(track) => navigate({ view: "mix", mix: track })} onError={music.setError}><>
+  return <PlaylistMenuProvider playlists={library.playlists} onEdit={library.edit} onDelete={(playlist) => { library.removePlaylist(playlist.id); if (page.view === "playlist" && page.playlistId === playlist.id) navigate({ view: "home" }); }} onPlay={(playlist) => { if (playlist.tracks.length) music.play(playlist.tracks[0], playlist.tracks, { collection: true }); }} onQueue={(playlist) => music.setQueue((items) => [...items, ...playlist.tracks.filter((track, index, tracks) => !items.some((item) => item.id === track.id) && tracks.findIndex((item) => item.id === track.id) === index)])}><SongMenuProvider liked={library.liked} playlists={library.playlists} onLike={library.toggleLike} onAdd={library.add} onCreateAndAdd={(name, description, track, cover) => { const playlist = library.create(name, description, cover); library.add(playlist.id, track); }} onRemove={library.remove} onRemoveQueue={(index, track) => music.setQueue((items) => items[index]?.id === track.id ? items.filter((_, itemIndex) => itemIndex !== index) : items)} onQueue={(track) => music.setQueue((items) => items.some((item) => item.id === track.id) ? items : [...items, track])} onArtist={(track) => navigate({ view: "artist", artist: { artist: track.artist, artist_id: track.artist_id } })} onAlbum={(id) => navigate({ view: "album", albumId: id })} onRadio={(track) => navigate({ view: "mix", mix: track })} onError={music.setError}><>
     {fullscreen && <FullscreenPlayer music={music} onClose={closeFullscreen} liked={isLiked} onLike={() => { if (music.track) library.toggleLike(music.track); }} />}
     <PlayerSurface suspended={fullscreen}>
     <header className="topbar">
@@ -306,7 +306,7 @@ export function Player() {
     </header>
     <div className="workspace">
       <><Library width={libraryWidth} liked={library.liked} playlists={library.playlists} active={page.playlistId || page.view} onOpen={(id) => {
-        if (id === "liked") navigate({ view: id });
+        if (id === "liked") navigate({ view: "liked" });
         else navigate({ view: "playlist", playlistId: id });
       }} onCreate={(name, description, cover) => { const playlist = library.create(name, description, cover); navigate({ view: "playlist", playlistId: playlist.id }); }} /><ResizeHandle label="Resize library sidebar" min={280} max={420} value={libraryWidth} onChange={setLibraryWidth} /></>
       <section ref={homeRef} className={`home-view player-scroll ${page.view === "mix" ? "mix-mode" : ""}`}>
@@ -337,7 +337,7 @@ export function Player() {
       </aside>
     </div>
     {mediaViewer && music.track && <ArtworkViewer track={music.track} videoUrl={mediaViewer.kind === "canvas" ? mediaViewer.url : undefined} playing={music.playing} onClose={() => setMediaViewer(null)} />}
-    {settingsOpen && <Suspense fallback={null}><Settings onClose={() => setSettingsOpen(false)} onClearHistory={music.clearHistory} autoplay={music.autoplay} onAutoplay={music.setAutoplay} repeat={music.repeat} onRepeat={music.setRepeat} discordEnabled={music.discordEnabled} onDiscordEnabled={music.toggleDiscord} track={music.track} position={music.position} duration={music.duration} /></Suspense>}
+    {settingsOpen && <Suspense fallback={null}><Settings onClose={() => setSettingsOpen(false)} onClearHistory={music.clearHistory} autoplay={music.autoplay} onAutoplay={music.setAutoplay} repeat={music.repeat} onRepeat={music.setRepeat} discordEnabled={music.discordEnabled} onDiscordEnabled={music.toggleDiscord} track={music.track} position={music.position} duration={music.duration} onImportSpotify={(result) => library.importSpotify({ liked: Boolean(result?.liked), sourceId: result?.source_id || "", title: result?.title || "", cover: result?.cover_url || "", tracks: result?.tracks || [] })} /></Suspense>}
     {shortcutsOpen && <Shortcuts close={() => setShortcutsOpen(false)} />}
     {welcomeOpen && <Welcome close={() => setWelcomeOpen(false)} />}
     <PlayerAlert message={music.error || library.error} onDismiss={() => { music.setError(""); library.clearError(); }} />
