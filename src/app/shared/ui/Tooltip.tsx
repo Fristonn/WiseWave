@@ -26,16 +26,19 @@ export function Tooltip({
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number; below: boolean } | null>(null);
+  const [engaged, setEngaged] = useState(false);
   const id = useId();
 
   const hide = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     setPosition(null);
+    setEngaged(false);
   };
 
   const show = () => {
     if (!enabled || !label) return;
+    setEngaged(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       const rect = ref.current?.getBoundingClientRect();
@@ -52,6 +55,7 @@ export function Tooltip({
   };
 
   useEffect(() => {
+    if (!engaged || !enabled || !label) return;
     window.addEventListener("scroll", hide, true);
     window.addEventListener("resize", hide);
     return () => {
@@ -59,7 +63,7 @@ export function Tooltip({
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("resize", hide);
     };
-  }, []);
+  }, [engaged, enabled, label]);
 
   useLayoutEffect(() => {
     if (!position || !tooltipRef.current) return;

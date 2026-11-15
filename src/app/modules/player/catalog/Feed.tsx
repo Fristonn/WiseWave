@@ -1,6 +1,6 @@
 import { Classic } from "../../../shared/ui/Classic";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChevronLeft, ChevronRight, Clock3, Compass, History, ListPlus, MoreVertical, Play, Radio, Search, Shuffle } from "lucide-react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, Compass, History, ListPlus, MoreVertical, Play, Radio, Search, Shuffle } from "lucide-react";
 import { Music, type CatalogAlbum, type CatalogArtist, type CatalogPlaylist, type Track } from "../../../mygo";
 import { SearchResults, type SearchCategory } from "../search/SearchResults";
 import { Artwork, artworkURL, hasArtworkURL, preloadArtworkSource } from "../../../shared/ui/Artwork";
@@ -311,7 +311,7 @@ function QuickPicks({
       ) : (
         <div className="feed-empty">
           <Radio size={28} />
-          <strong>No recommendations yet</strong>
+          <strong>no recommendations yet</strong>
           <span>Listen to or like songs to shape your feed.</span>
         </div>
       )}
@@ -351,6 +351,7 @@ function loadMix(track: Track) {
   if (pending) return pending;
   const request = Music.related(track.id).then((tracks) => {
     const items = [track, ...tracks.filter((item) => item.id !== track.id)];
+    if (mixCache.size >= 64 && !mixCache.has(track.id)) mixCache.delete(mixCache.keys().next().value!);
     mixCache.set(track.id, items);
     return items;
   }).finally(() => mixRequests.delete(track.id));
@@ -419,9 +420,12 @@ function saveDiscoverCache(tracks: Track[], seedIndex: number, timestamp: number
   } catch {}
 }
 
-export function Feed({ history, popular, forYou, searchResults, albumResults = [], artistResults = [], playlistResults = [], searchQuery, searchCategory, onSearchCategory, searchLoading, searchError, onPlay, mix, onMix, onArtist, onAlbum, onPlaylist, onQueue, current, queue, liked, playlists, onLike, onAdd, playing = false }: { liked: Track[]; playlists: Playlist[]; onLike: (track: Track) => void; onAdd: (id: string, track: Track) => void; onArtist: (track: { artist: string; artist_id?: string }) => void; onAlbum?: (albumId: string) => void; onPlaylist?: (playlistId: string) => void; onQueue: (track: Track) => void; current: Track | null; queue: Track[]; mix: Track | null; onMix: (track: Track | null) => void; history: Track[]; popular: Track[]; forYou: Track[]; searchResults: Track[]; albumResults?: CatalogAlbum[]; artistResults?: CatalogArtist[]; playlistResults?: CatalogPlaylist[]; searchQuery: string; searchCategory: SearchCategory; onSearchCategory: (category: SearchCategory) => void; searchLoading?: boolean; searchError?: string; onPlay: (track: Track, queue: Track[]) => void; playing?: boolean }) {
+function FeedContent({ history, popular, forYou, searchResults, albumResults = [], artistResults = [], playlistResults = [], searchQuery, searchCategory, onSearchCategory, searchLoading, searchError, onPlay, mix, onMix, onBack, onArtist, onAlbum, onPlaylist, onQueue, current, queue, liked, playlists, onLike, onAdd, playing = false }: { liked: Track[]; playlists: Playlist[]; onLike: (track: Track) => void; onAdd: (id: string, track: Track) => void; onArtist: (track: { artist: string; artist_id?: string }) => void; onAlbum?: (albumId: string) => void; onPlaylist?: (playlistId: string) => void; onQueue: (track: Track) => void; current: Track | null; queue: Track[]; mix: Track | null; onMix: (track: Track | null) => void; onBack: () => void; history: Track[]; popular: Track[]; forYou: Track[]; searchResults: Track[]; albumResults?: CatalogAlbum[]; artistResults?: CatalogArtist[]; playlistResults?: CatalogPlaylist[]; searchQuery: string; searchCategory: SearchCategory; onSearchCategory: (category: SearchCategory) => void; searchLoading?: boolean; searchError?: string; onPlay: (track: Track, queue: Track[]) => void; playing?: boolean }) {
   const openSongMenu = useSongMenu();
   const [mixSeedTracks, setMixSeedTracks] = useState<Track[]>(() => history.slice(0, 16));
+  const heroTracks = useMemo(() => Array.from(
+    new Map([...forYou, ...popular, ...history].filter((track) => track?.id && hasArtworkURL(track.album_art_url)).map((track) => [track.id, track])).values(),
+  ).slice(0, 24), [forYou, popular, history]);
   useEffect(() => {
     setMixSeedTracks(history.slice(0, 16));
   }, [forYou]);
@@ -702,13 +706,13 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
     loadMix(mix).then((full) => {
       if (active) setMixTracks(full);
     }).catch(() => {
-      if (active) setMixError("This mix could not be loaded.");
+      if (active) setMixError("couldn't load this mix");
     }).finally(() => {
       if (active) setMixLoading(false);
     });
     return () => { active = false; };
   }, [mix, mixRetry]);
-  if (searchQuery) return <SearchResults key={searchQuery} query={searchQuery} category={searchCategory} onCategory={onSearchCategory} loading={searchLoading} error={searchError} tracks={searchResults} albums={albumResults} artists={artistResults} playlists={playlistResults} liked={liked} current={current} playing={playing} onPlay={onPlay} onLike={onLike} onQueue={onQueue} onArtist={onArtist} onAlbum={onAlbum || (() => {})} onPlaylist={onPlaylist || (() => {})} />;
+  if (searchQuery) return <SearchResults query={searchQuery} category={searchCategory} onCategory={onSearchCategory} loading={searchLoading} error={searchError} tracks={searchResults} albums={albumResults} artists={artistResults} playlists={playlistResults} current={current} playing={playing} onPlay={onPlay} onArtist={onArtist} onAlbum={onAlbum || (() => {})} onPlaylist={onPlaylist || (() => {})} />;
   if (mix) {
     const visible = mixTracks.filter((track) => `${track.title} ${track.artist}`.toLowerCase().includes(mixQuery.trim().toLowerCase()));
     const shuffle = () => {
@@ -717,11 +721,12 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
       if (shuffled.length) onPlay(shuffled[0], shuffled);
     };
     return (
-      <div className="player-scroll view-enter collection mix-view">
+      <div className="view-enter collection mix-view">
         <div
           className="collection-header mix-header"
           style={{ background: mixTheme.gradient }}
         >
+          <button className="artist-back" type="button" aria-label="Back from daily mix" onClick={onBack}><ArrowLeft size={20} /></button>
           <div className="collection-heading">
             <Artwork className="collection-cover" src={mix.album_art_url} size={176} />
             <div className="collection-heading-meta">
@@ -772,14 +777,14 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
 
           {mixError ? (
             <div className="detail-empty">
-              <PlayerAlert message={mixError} onDismiss={() => {}} action={{ label: "Retry", onClick: () => setMixRetry((value) => value + 1) }} />
+              <PlayerAlert message={mixError} onDismiss={() => {}} action={{ label: "retry", onClick: () => setMixRetry((value) => value + 1) }} />
               <button className="artist-secondary" type="button" onClick={() => setMixRetry((value) => value + 1)}>
-                Try again
+                try again
               </button>
             </div>
           ) : mixLoading ? (
             <p className="detail-empty loading-state" role="status">
-              <Classic />Loading your mix…
+              <Classic />loading your mix…
             </p>
           ) : (
             <>
@@ -845,7 +850,7 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
               </div>
               {!visible.length && (
                 <p className="detail-empty">
-                  {mixQuery ? "No songs match your search." : "No songs are available for this mix."}
+                  {mixQuery ? "no songs match your search" : "no songs in this mix yet"}
                 </p>
               )}
             </>
@@ -854,9 +859,6 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
       </div>
     );
   }
-  const heroTracks = Array.from(
-    new Map([...forYou, ...popular, ...history].filter((track) => track?.id && hasArtworkURL(track.album_art_url)).map((track) => [track.id, track])).values(),
-  ).slice(0, 24);
 
   return <>
     <div className="home-hero-wrap">
@@ -894,8 +896,8 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
         ) : (
           <div className="feed-empty">
             <Compass size={28} />
-            <strong>Nothing to discover yet</strong>
-            <span>Play a few songs to help discover your sound.</span>
+            <strong>nothing to discover yet</strong>
+            <span>play a few songs to get started</span>
           </div>
         )
       }
@@ -937,8 +939,8 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
         />
       )}
     </FeedSection>
-    <FeedSection title="Recents" description="Your latest listens" count={history.length} empty={<div className="feed-empty"><History size={28} /><strong>Nothing here yet</strong><span>Songs you listen to will show up here.</span></div>}>{(ref) => <Rows liked={liked} playlists={playlists} onLike={onLike} onAdd={onAdd} onArtist={onArtist} onQueue={onQueue} current={current} queue={queue} tracks={history} onPlay={onPlay} rowRef={ref} playing={playing} />}</FeedSection>
-    <FeedSection title="Daily Mix" description="A fresh mix of your favorites" count={mixes.length} empty={<div className="feed-empty"><Radio size={28} /><strong>No mixes yet</strong><span>Listen to a few songs to get your daily mix.</span></div>}>{(ref) => {
+    <FeedSection title="Recents" description="Your latest listens" count={history.length} empty={<div className="feed-empty"><History size={28} /><strong>nothing here yet</strong><span>songs you listen to will show up here</span></div>}>{(ref) => <Rows liked={liked} playlists={playlists} onLike={onLike} onAdd={onAdd} onArtist={onArtist} onQueue={onQueue} current={current} queue={queue} tracks={history} onPlay={onPlay} rowRef={ref} playing={playing} />}</FeedSection>
+    <FeedSection title="Daily Mix" description="A fresh mix of your favorites" count={mixes.length} empty={<div className="feed-empty"><Radio size={28} /><strong>no mixes yet</strong><span>listen to a few songs to get your daily mix</span></div>}>{(ref) => {
       const visibleMixes = mixes.filter((track) => hasArtworkURL(track.album_art_url) && !failedMixIds.has(track.id));
       const pages = chunkTracks(visibleMixes, 8);
       return (
@@ -958,4 +960,25 @@ export function Feed({ history, popular, forYou, searchResults, albumResults = [
     }}</FeedSection>
     <QuickPicks tracks={forYou.length ? forYou : popular} onPlay={onPlay} onArtist={onArtist} current={current} playing={playing} />
   </>;
+}
+
+type FeedProps = Parameters<typeof FeedContent>[0];
+const MemoizedFeed = memo(FeedContent);
+
+export function Feed(props: FeedProps) {
+  const latest = useRef(props);
+  useLayoutEffect(() => { latest.current = props; });
+  const actions = useMemo(() => ({
+    onPlay: (...args: Parameters<FeedProps["onPlay"]>) => latest.current.onPlay(...args),
+    onArtist: (...args: Parameters<FeedProps["onArtist"]>) => latest.current.onArtist(...args),
+    onAlbum: (id: string) => latest.current.onAlbum?.(id),
+    onPlaylist: (id: string) => latest.current.onPlaylist?.(id),
+    onQueue: (track: Track) => latest.current.onQueue(track),
+    onLike: (track: Track) => latest.current.onLike(track),
+    onAdd: (id: string, track: Track) => latest.current.onAdd(id, track),
+    onMix: (track: Track | null) => latest.current.onMix(track),
+    onBack: () => latest.current.onBack(),
+    onSearchCategory: (category: SearchCategory) => latest.current.onSearchCategory(category),
+  }), []);
+  return <MemoizedFeed {...props} {...actions} onAlbum={props.onAlbum ? actions.onAlbum : undefined} onPlaylist={props.onPlaylist ? actions.onPlaylist : undefined} />;
 }

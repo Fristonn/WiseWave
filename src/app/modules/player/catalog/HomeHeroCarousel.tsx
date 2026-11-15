@@ -117,18 +117,17 @@ export function HomeHeroCarousel({
   const layerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const offsetRef = useRef(0);
-  const pageRef = useRef(2);
-  const targetRef = useRef(2);
+  const pageRef = useRef(0);
+  const targetRef = useRef(0);
   const anim = useRef(0);
   const widthRef = useRef(0);
   const strategyRef = useRef<Strategy | null>(null);
   const drag = useRef({ moved: false, axis: "" as "" | "x" | "y", x: 0, y: 0, s: 0, page: 0, samples: [] as [number, number][] });
   const autoPauseUntil = useRef(0);
   const [width, setWidth] = useState(0);
-  const [page, setPage] = useState(2);
-  const slides = useMemo(() => items.length > 1 ? [...items.slice(-2), ...items, ...items.slice(0, 2)] : items, [items]);
+  const [page, setPage] = useState(0);
+  const slides = items;
   const n = slides.length;
-  const loop = items.length > 1;
   const reduceMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const readWidth = useCallback((el: HTMLElement) => {
@@ -187,10 +186,14 @@ export function HomeHeroCarousel({
   }, [commitWidth, measure, readWidth, n]);
 
   useEffect(() => {
+    let measureFrame = 0;
+    let settleFrame = 0;
     const onRemeasure = () => {
-      requestAnimationFrame(() => {
+      cancelAnimationFrame(measureFrame);
+      cancelAnimationFrame(settleFrame);
+      measureFrame = requestAnimationFrame(() => {
         measure();
-        requestAnimationFrame(measure);
+        settleFrame = requestAnimationFrame(measure);
       });
     };
     window.addEventListener("resize", onRemeasure);
@@ -212,6 +215,8 @@ export function HomeHeroCarousel({
       window.removeEventListener("wisewave-settings-changed", onRemeasure);
       mo.disconnect();
       appMo?.disconnect();
+      cancelAnimationFrame(measureFrame);
+      cancelAnimationFrame(settleFrame);
     };
   }, [measure]);
 
@@ -254,12 +259,12 @@ export function HomeHeroCarousel({
   useLayoutEffect(() => {
     if (!st) return;
     cancelAnimationFrame(anim.current);
-    const p = loop ? clamp(pageRef.current, 2, n - 3) : 0;
+    const p = clamp(pageRef.current, 0, Math.max(0, n - 1));
     targetRef.current = p;
     pageRef.current = p;
     setPage(p);
     applyOffset(st.snaps[p] ?? 0);
-  }, [st, n, loop, applyOffset]);
+  }, [st, n, applyOffset]);
 
   const animateTo = useCallback((target: number, v0 = 0, complete?: () => void) => {
     cancelAnimationFrame(anim.current);
@@ -292,17 +297,15 @@ export function HomeHeroCarousel({
     if (!st || !n) return;
     const p = clamp(i, 0, n - 1);
     targetRef.current = p;
-    animateTo(st.snaps[p], v0, () => {
-      if (!loop || (p !== 1 && p !== n - 2)) return;
-      const equivalent = p === 1 ? n - 3 : 2;
-      targetRef.current = equivalent;
-      applyOffset(st.snaps[equivalent]);
-    });
-  }, [st, n, loop, animateTo, applyOffset]);
+    animateTo(st.snaps[p], v0);
+  }, [st, n, animateTo]);
 
   useEffect(() => {
     const el = rootRef.current;
     if (!el || !st) return;
+
+    let removeDragListeners = () => {};
+    let resetTimer = 0;
 
     const hitItem = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null;
@@ -314,6 +317,8 @@ export function HomeHeroCarousel({
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const item = hitItem(e.target);
       if (!item) return;
+      removeDragListeners();
+      window.clearTimeout(resetTimer);
 
       cancelAnimationFrame(anim.current);
       autoPauseUntil.current = performance.now() + AUTO_MS;
@@ -352,9 +357,7 @@ export function HomeHeroCarousel({
       };
 
       const up = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", up);
+        removeDragListeners();
         el.style.cursor = "grab";
         const wasSlide = d.moved && d.axis === "x";
         if (!wasSlide) {
@@ -374,7 +377,7 @@ export function HomeHeroCarousel({
         let target = Math.abs(v) > FLING_VELOCITY ? d.page + (v > 0 ? 1 : -1) : near;
         target = clamp(target, d.page - 1, d.page + 1);
         goTo(target, v);
-        window.setTimeout(() => {
+        resetTimer = window.setTimeout(() => {
           d.moved = false;
           d.axis = "";
           applyOffset(offsetRef.current);
@@ -384,36 +387,29 @@ export function HomeHeroCarousel({
       window.addEventListener("pointermove", move, { passive: false });
       window.addEventListener("pointerup", up);
       window.addEventListener("pointercancel", up);
+      removeDragListeners = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+      };
     };
 
     el.addEventListener("pointerdown", onPointerDown);
-    return () => el.removeEventListener("pointerdown", onPointerDown);
-  }, [st, applyOffset, goTo]);
-
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el || !st) return;
-    let lock = 0;
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      const next = targetRef.current + (e.deltaX > 0 ? 1 : -1);
-      if (next < 0 || next > n - 1) return;
-      e.preventDefault();
-      const now = performance.now();
-      if (now < lock) return;
-      lock = now + 450;
-      autoPauseUntil.current = now + AUTO_MS;
-      goTo(next);
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      removeDragListeners();
+      window.clearTimeout(resetTimer);
+      drag.current.moved = false;
+      drag.current.axis = "";
+      drag.current.samples = [];
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [st, n, goTo]);
+  }, [st, applyOffset, goTo]);
 
   useEffect(() => {
     if (reduceMotion || n < 2) return;
     const timer = window.setInterval(() => {
       if (document.hidden || !rootRef.current?.checkVisibility() || performance.now() < autoPauseUntil.current || drag.current.moved) return;
-      goTo(targetRef.current + 1);
+      if (targetRef.current < n - 1) goTo(targetRef.current + 1);
     }, AUTO_MS);
     return () => window.clearInterval(timer);
   }, [n, reduceMotion, goTo]);
@@ -446,7 +442,7 @@ export function HomeHeroCarousel({
           <div ref={layerRef} className="home-hero-layer">
             {slides.map((track, i) => {
               const active = i === page;
-              const logicalIndex = loop ? (i - 2 + items.length) % items.length : i;
+              const logicalIndex = i;
               return (
                 <div
                   key={`${track.id}-${i}`}
