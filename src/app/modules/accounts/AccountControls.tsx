@@ -31,14 +31,14 @@ export function AccountControls() {
         <div className="notifications-heading">Notifications</div>
         <div className="notifications-empty">
           <div className="notification-illustration" aria-hidden="true"><div className="notification-card"><i /><span><b /><b /></span><small>now</small></div><div className="notification-card"><i /><span><b /><b /></span><small>now</small></div></div>
-          <strong>Notifications unavailable</strong><p>Notifications aren’t connected yet.</p>
+          <strong>no notifications yet</strong><p>notifications aren't connected yet</p>
         </div>
       </section>}
     </div>
     <div className="account-menu profile-menu">
       <button className="profile-trigger" type="button" aria-label="Open account menu" aria-expanded={open === "profile"} aria-controls="profile-menu" data-menu="profile" onClick={() => setOpen(open === "profile" ? null : "profile")}><span className="profile-avatar"><UserRound size={19} /></span><span className="profile-name">Friston</span><ChevronDown className={open === "profile" ? "connection-chevron open" : "connection-chevron"} size={14} /></button>
       {open === "profile" && <section className="account-dropdown profile-dropdown" id="profile-menu" aria-label="Account">
-        <div className="profile-heading"><span className="profile-avatar profile-avatar-large"><UserRound size={22} /></span><div><strong>Profile unavailable</strong><span>No account connected</span></div></div>
+        <div className="profile-heading"><span className="profile-avatar profile-avatar-large"><UserRound size={22} /></span><div><strong>no profile yet</strong><span>no account connected</span></div></div>
       </section>}
     </div>
   </div>;

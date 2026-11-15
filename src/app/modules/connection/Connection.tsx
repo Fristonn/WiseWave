@@ -145,7 +145,7 @@ export function Connection({ music }: { music?: ReturnType<typeof useMusic> }) {
           <span aria-live="polite" className={`connection-action-confirm ${isResetPending ? "" : "confirmed"} ${isResetReturning ? "connection-action-confirm-exit" : ""}`}>
             {isResetPending && <Classic />}
             <span className={isResetPending ? "connection-action-pending-text" : "connection-action-confirm-text"}>
-              {isResetPending ? "Resetting audio engine" : "Audio engine reset"}
+              {isResetPending ? "resetting audio engine" : "audio engine reset"}
             </span>
           </span>
         )}
@@ -163,7 +163,7 @@ export function Connection({ music }: { music?: ReturnType<typeof useMusic> }) {
           <span aria-live="polite" className={`connection-action-confirm ${isStopPending ? "" : "confirmed"} ${isStopReturning ? "connection-action-confirm-exit" : ""}`}>
             {isStopPending && <Classic />}
             <span className={isStopPending ? "connection-action-pending-text" : "connection-action-confirm-text"}>
-              {isStopPending ? "Stopping playback" : "Playback stopped"}
+              {isStopPending ? "stopping playback" : "playback stopped"}
             </span>
           </span>
         )}

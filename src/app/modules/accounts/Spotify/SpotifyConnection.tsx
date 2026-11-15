@@ -1,5 +1,6 @@
 import { reportAccountImport } from "../shared/ImportProgress";
 import { accountText } from "../shared/accountText";
+import { feedbackText } from "../../../shared/feedbackText";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { AccountLibraryDialog } from "../shared/AccountLibraryDialog";
 import { X } from "lucide-react";
@@ -60,7 +61,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
         setSpotifySync(null);
         setSpotifyImportingId(null);
         if (wasLinked === true && !spotifyModalOpenRef.current) {
-          setNote("Spotify disconnected.");
+          setNote("spotify disconnected");
         }
         spotifyWasLinkedRef.current = false;
         setSpotifyBusy(false);
@@ -77,7 +78,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
         setSpotifyAvatar(status.library?.image_url || status.image_url || "");
         setSpotifyBusy(false);
         if (wasLinked === false && !spotifyModalOpenRef.current) {
-          setNote("Spotify linked.");
+          setNote("spotify connected");
         }
         spotifyWasLinkedRef.current = true;
       }
@@ -124,7 +125,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
       }, 150);
     }).catch((error) => {
       setSpotifyImportingId(null);
-      reportAccountImport({provider:"spotify",phase:"error",message:error instanceof Error && error.message ? error.message : "Spotify import failed."});
+      reportAccountImport({provider:"spotify",phase:"error",message:error instanceof Error && error.message ? error.message : "couldn't import your spotify music"});
     });
   }, [closeSpotifyModal, onImportSpotify, spotifyImportingId]);
 
@@ -138,9 +139,9 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
       setSpotifySync(null);
       setSpotifyImportingId(null);
       setSpotifyModalOpen(false);
-      setNote("Spotify logged out.");
+      setNote("logged out of spotify");
     }).catch((error: unknown) => {
-      setNote(error instanceof Error && error.message ? error.message : "Could not log out of Spotify.");
+      setNote(error instanceof Error && error.message ? error.message : "couldn't log out of spotify");
     }).finally(() => setSpotifyBusy(false));
   }, [spotifyBusy, spotifyImportingId, spotifySync?.phase]);
 
@@ -222,7 +223,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
                           setSpotifyBusy(true);
                           void SpotifyLogin.start().catch((error: unknown) => {
                             setSpotifyBusy(false);
-                            setNote(error instanceof Error && error.message ? error.message : "Could not start Spotify sign-in.");
+                            setNote(error instanceof Error && error.message ? error.message : "couldn't start spotify sign-in");
                           });
                         }}
                       >
@@ -237,7 +238,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
                           onClick={() => {
                             setSpotifyCancelling(true);
                             void SpotifyLogin.cancel().then(() => setSpotifyBusy(false)).catch((error: unknown) => {
-                              setNote(error instanceof Error && error.message ? error.message : "Could not cancel Spotify sign-in.");
+                              setNote(error instanceof Error && error.message ? error.message : "couldn't cancel spotify sign-in");
                             }).finally(() => setSpotifyCancelling(false));
                           }}
                         >
@@ -271,7 +272,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
                 <button type="button" className="account-sync-close" aria-label="Close" onClick={closeSpotifyModal}>
                   <X size={18} />
                 </button>
-                <p>{spotifySync.error || "Could not sync your Spotify library."}</p>
+                <p>{feedbackText(spotifySync.error || "couldn't sync your spotify library")}</p>
                 <button
                   type="button"
                   className="settings-btn"
@@ -279,7 +280,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
                     void SpotifyAccount.syncLibrary().catch(() => {});
                   }}
                 >
-                  Try again
+                  try again
                 </button>
               </div>
             ) : spotifySync?.library ? (

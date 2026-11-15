@@ -116,7 +116,7 @@ func StatusHTML(title, label, accent string) string {
     <div class="shimmer-text">%s</div>
   </div>
 </body>
-</html>`, html.EscapeString(title), html.EscapeString(label)), "#1db954", accent)
+</html>`, html.EscapeString(title), html.EscapeString(strings.ToLower(label))), "#1db954", accent)
 }
 
 func WindowOptions(title, address, background string, session *mygo.Session) mygo.WindowOptions {

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { feedbackText } from "../feedbackText";
 
 type SnackbarSpec = { key?: string; text: string; duration?: number; progress?: number | null; progressLabel?: string; accent?: string; action?: { label: string; onClick: () => void }; onDismiss?: () => void };
 type SnackbarItem = SnackbarSpec & { id: number; slot: string };
@@ -48,7 +49,7 @@ function SnackbarToast({ item, remove }: { item: SnackbarItem; remove: (slot: st
       {hasProgress && <ProgressBorder value={item.progress ?? null} accent={item.accent} />}
       <span className="snackbar-text"><span>{item.text}</span>{hasProgress && <span className="snackbar-progress-meta" role="progressbar" aria-label={item.text} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress == null ? undefined : Math.round(item.progress * 100)} aria-valuetext={item.progressLabel}>{item.progressLabel}</span>}</span>
       {item.action && <button type="button" className="snackbar-action" onClick={() => { item.action?.onClick(); dismiss(); }}>{item.action.label}</button>}
-      <button type="button" className="snackbar-close" aria-label="Dismiss" onClick={dismiss}><X size={20} /></button>
+      <button type="button" className="snackbar-close" aria-label="dismiss" onClick={dismiss}><X size={20} /></button>
     </div>
   </div>;
 }
@@ -60,7 +61,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   const show = useCallback((spec: SnackbarSpec) => {
     const slot = spec.key || "notification";
     const previous = current.current.get(slot);
-    const next = { ...spec, slot, id: spec.key && previous ? previous.id : ++nextId.current };
+    const next = { ...spec, text: feedbackText(spec.text), progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: spec.key && previous ? previous.id : ++nextId.current };
     current.current.set(slot, next);
     setItems(Array.from(current.current.values()));
     if (!spec.key) previous?.onDismiss?.();
