@@ -3,6 +3,7 @@ package lyrics
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -23,10 +24,13 @@ type Service struct {
 	cache     map[string]cachedRecord
 	flights   map[string]*lyricsFlight
 	cacheLock sync.RWMutex
+	disk      *recordCache
 }
 
+var cacheVideoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+
 func NewService(client *innertube.MusicClient) *Service {
-	return &Service{providers: []Provider{NewYouLyPlusProvider(), NewPaxSenixProvider(), NewUnisonProvider(), NewBetterLyricsProvider(), NewSimpMusicProvider(), NewLrclibProvider(), NewKugouProvider(), NewLrcRedProvider(), NewAmllProvider(), NewYouTubeSubtitleProvider(), NewYouTubeMusicProvider(client)}, cache: make(map[string]cachedRecord), flights: make(map[string]*lyricsFlight)}
+	return &Service{providers: []Provider{NewYouLyPlusProvider(), NewPaxSenixProvider(), NewUnisonProvider(), NewBetterLyricsProvider(), NewSimpMusicProvider(), NewLrclibProvider(), NewKugouProvider(), NewLrcRedProvider(), NewAmllProvider(), NewYouTubeSubtitleProvider(), NewYouTubeMusicProvider(client)}, cache: make(map[string]cachedRecord), flights: make(map[string]*lyricsFlight), disk: newRecordCache()}
 }
 
 func (s *Service) FetchLyrics(title, artist, album string, durationSeconds int) (*Record, error) {
@@ -34,6 +38,9 @@ func (s *Service) FetchLyrics(title, artist, album string, durationSeconds int) 
 }
 
 func lyricsCacheKey(meta TrackMeta) string {
+	if cacheVideoID.MatchString(meta.VideoID) {
+		return "youtube:" + meta.VideoID
+	}
 	normalize := func(value string) string { return strings.ToLower(strings.Join(strings.Fields(value), " ")) }
 	value, _ := json.Marshal([]interface{}{normalize(meta.Title), normalize(meta.Artist), normalize(meta.Album), meta.DurationSeconds, meta.VideoID, meta.ISRC, meta.SpotifyID})
 	return string(value)
@@ -68,6 +75,15 @@ func (s *Service) FetchLyricsForTrack(meta TrackMeta, refresh ...bool) (*Record,
 			record := cloneRecord(cached.record)
 			s.cacheLock.Unlock()
 			return record, nil
+		}
+		if record := s.disk.get(key); record != nil {
+			if s.cache == nil {
+				s.cache = make(map[string]cachedRecord)
+			}
+			s.trimMemoryCache(key)
+			s.cache[key] = cachedRecord{record: record, expiresAt: time.Now().Add(24 * time.Hour)}
+			s.cacheLock.Unlock()
+			return cloneRecord(record), nil
 		}
 	}
 	if s.flights == nil {
@@ -120,6 +136,23 @@ func recordDocument(doc *LyricsDocument) *Record {
 	return &Record{Source: doc.Source, SourceURL: doc.SourceURL, Contributor: doc.Contributor, ContributorURL: doc.ContributorURL, Type: doc.Type, TrackName: doc.TrackName, ArtistName: doc.ArtistName, AlbumName: doc.AlbumName, Duration: doc.Duration, Instrumental: doc.Instrumental, PlainLyrics: doc.PlainLyrics, SyncedLyrics: doc.SyncedLyrics, Lines: doc.Lines}
 }
 
+func (s *Service) trimMemoryCache(key string) {
+	if _, exists := s.cache[key]; exists || len(s.cache) < 256 {
+		return
+	}
+	for entry, cached := range s.cache {
+		if time.Now().After(cached.expiresAt) {
+			delete(s.cache, entry)
+		}
+	}
+	if len(s.cache) >= 256 {
+		for entry := range s.cache {
+			delete(s.cache, entry)
+			break
+		}
+	}
+}
+
 func (s *Service) cacheDocument(key string, flight *lyricsFlight, doc *LyricsDocument, refining bool) {
 	s.cacheLock.Lock()
 	defer s.cacheLock.Unlock()
@@ -129,22 +162,13 @@ func (s *Service) cacheDocument(key string, flight *lyricsFlight, doc *LyricsDoc
 	if s.cache == nil {
 		s.cache = make(map[string]cachedRecord)
 	}
-	if len(s.cache) >= 256 {
-		for entry, cached := range s.cache {
-			if time.Now().After(cached.expiresAt) {
-				delete(s.cache, entry)
-			}
-		}
-		if len(s.cache) >= 256 {
-			for entry := range s.cache {
-				delete(s.cache, entry)
-				break
-			}
-		}
-	}
+	s.trimMemoryCache(key)
 	record := cloneRecord(recordDocument(doc))
 	record.Refining = refining
 	s.cache[key] = cachedRecord{record: record, expiresAt: time.Now().Add(24 * time.Hour)}
+	if !refining {
+		s.disk.put(key, record)
+	}
 }
 
 func (s *Service) collectLyrics(meta TrackMeta, key string, flight *lyricsFlight) {
