@@ -84,6 +84,19 @@ export interface DiscordState {
   button_url?: string;
 }
 
+export interface DownloadResult {
+  track_id: string;
+  title: string;
+  artist: string;
+  album: string;
+  audio_file_path: string;
+  lyrics_file_path?: string;
+  ttml_file_path?: string;
+  file_size_bytes: number;
+  has_synced_lrc: boolean;
+  has_ttml_syllable: boolean;
+}
+
 export type ItemKind = string;
 
 export interface Line {
@@ -131,6 +144,24 @@ export interface MusicSection {
   kind: string;
   items: MusicItem[];
   continuationToken?: string;
+}
+
+export interface OfflineTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  audio_file_name: string;
+  audio_file_path: string;
+  lyrics_file_path?: string;
+  ttml_file_path?: string;
+  file_size_bytes: number;
+  has_lyrics: boolean;
+  has_ttml: boolean;
+  modified_at: number;
+  duration: string;
+  duration_seconds: number;
+  album_art_url: string;
 }
 
 export interface PlaybackState {
@@ -358,6 +389,12 @@ export const Music = {
   },
   charts(): Promise<BrowseResult | null> {
     return call("Music.Charts");
+  },
+  download(track: Track): Promise<DownloadResult | null> {
+    return call("Music.Download", track);
+  },
+  listDownloads(): Promise<OfflineTrack[]> {
+    return call("Music.ListDownloads");
   },
   lyrics(title: string, artist: string, album: string, duration: number, id: string): Promise<Record | null> {
     return call("Music.Lyrics", title, artist, album, duration, id);
