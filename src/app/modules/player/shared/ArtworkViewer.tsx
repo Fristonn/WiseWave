@@ -7,19 +7,13 @@ import { MarqueeText } from "../../../shared/ui/MarqueeText";
 
 export function ArtworkViewer({
   track,
-  videoUrl,
-  playing = false,
   onClose,
 }: {
   track: Track;
-  videoUrl?: string;
-  playing?: boolean;
   onClose: () => void;
 }) {
-  const showVideo = typeof videoUrl === "string" && videoUrl.startsWith("https://");
   const [closing, setClosing] = useState(false);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const timer = useRef<number | undefined>(undefined);
   const close = () => {
     if (timer.current !== undefined) return;
@@ -41,26 +35,12 @@ export function ArtworkViewer({
     };
   }, []);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !showVideo) return;
-    video.muted = true;
-    video.defaultMuted = true;
-    video.playsInline = true;
-    if (playing) {
-      const play = video.play();
-      if (play && typeof play.catch === "function") play.catch(() => {});
-      return;
-    }
-    video.pause();
-  }, [playing, showVideo, videoUrl]);
-
   return createPortal(
     <div
       className={`artwork-viewer-overlay ${closing ? "artwork-viewer-closing" : ""}`}
       role="dialog"
       aria-modal="true"
-      aria-label={showVideo ? "Canvas video" : "Album artwork"}
+      aria-label="Album artwork"
       onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
@@ -72,24 +52,10 @@ export function ArtworkViewer({
         }
       }}
     >
-      <div className={`artwork-viewer ${showVideo ? "is-video" : ""}`}>
+      <div className="artwork-viewer">
         <div className="artwork-viewer-image">
-          {showVideo ? (
-            <video
-              ref={videoRef}
-              className="artwork-viewer-video"
-              src={videoUrl}
-              poster={track.album_art_url || undefined}
-              muted
-              loop
-              playsInline
-              autoPlay={playing}
-              preload="metadata"
-            />
-          ) : (
-            <Artwork src={track.album_art_url} size={560} />
-          )}
-          <button ref={closeButton} type="button" aria-label={showVideo ? "Close canvas" : "Close artwork"} onClick={close}>
+          <Artwork src={track.album_art_url} size={560} />
+          <button ref={closeButton} type="button" aria-label="Close artwork" onClick={close}>
             <X size={20} />
           </button>
         </div>

@@ -25,32 +25,48 @@ export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (trac
 
   useEffect(() => {
     let active = true;
-    prefetched.current.clear();
     artistNames(track.artist).forEach((artistName, artistIndex) => {
       const id = artistIndex === 0 ? track.artist_id || "" : "";
       void loadArtist(id, artistName).then((result) => {
-        if (active) prefetched.current.set(`${id}\n${artistName}`, result);
+        if (active) {
+          if (prefetched.current.size >= 24) prefetched.current.delete(prefetched.current.keys().next().value!);
+          prefetched.current.set(`${id}\n${artistName}`, result);
+          const imageURL = result.banner_url || result.artwork_url;
+          if (imageURL) {
+            const image = new Image();
+            image.referrerPolicy = "no-referrer";
+            image.src = imageURL;
+          }
+        }
       }).catch(() => {});
     });
     return () => { active = false; };
-  }, [track.id, track.artist, track.artist_id]);
+  }, [track.artist, track.artist_id]);
 
   useEffect(() => {
     let active = true;
     const cached = prefetched.current.get(`${artistID}\n${name}`);
-    setArtist(cached || null);
+    if (cached) setArtist(cached);
     setLoading(!cached);
     setFailed(false);
     setExpanded(false);
     setOverflowing(false);
-    setImageFailed(false);
-    void loadArtist(artistID, name).then((result) => {
+    if (cached) setImageFailed(false);
+    void loadArtist(artistID, name).then(async (result) => {
+      const imageURL = result.banner_url || result.artwork_url;
+      if (!cached && imageURL) {
+        const image = new Image();
+        image.referrerPolicy = "no-referrer";
+        image.src = imageURL;
+        await image.decode().catch(() => {});
+      }
       if (active) {
         prefetched.current.set(`${artistID}\n${name}`, result);
         setArtist(result);
+        setImageFailed(false);
       }
     }).catch(() => {
-      if (active) setFailed(true);
+      if (active) { setArtist(null); setFailed(true); }
     }).finally(() => {
       if (active) setLoading(false);
     });
@@ -85,8 +101,8 @@ export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (trac
       <h2>Meet the artist</h2>
       {names.length > 1 && <div className="now-artist-navigation"><button type="button" aria-label="Previous artist" onClick={() => move(-1)}><ChevronLeft size={20} /></button><button type="button" aria-label="Next artist" onClick={() => move(1)}><ChevronRight size={20} /></button></div>}
     </div>
-    <div key={`${track.id}-${index}`} className="now-artist-slide" data-direction={direction < 0 ? "back" : "forward"}>
-    {loading ? <><div className="now-artist-skeleton-banner" /><div className="now-artist-skeleton-info" aria-hidden="true"><span /><span /><span /><span /></div></> : <>
+    <div key={artist?.id || artist?.name || "loading"} className="now-artist-slide" data-direction={direction < 0 ? "back" : "forward"}>
+    {loading && !artist ? <><div className="now-artist-skeleton-banner" /><div className="now-artist-skeleton-info" aria-hidden="true"><span /><span /><span /><span /></div></> : <>
     <div className="now-artist-banner">
       {artist && !imageFailed && (artist.banner_url || artist.artwork_url) && <img src={artist.banner_url || artist.artwork_url} alt="" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} />}
     </div>
@@ -100,12 +116,12 @@ export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (trac
       </button>
       {artist?.monthly_listeners && <div className="now-artist-listeners">{artist.monthly_listeners}</div>}
       <div className="now-artist-about-body">
-        {failed ? <PlayerAlert message="Artist details couldn’t load." onDismiss={() => {}} action={{ label: "Retry", onClick: () => setRetry((value) => value + 1) }} /> : artist?.description ?
+        {failed ? <PlayerAlert message="couldn't load the artist details" onDismiss={() => {}} action={{ label: "retry", onClick: () => setRetry((value) => value + 1) }} /> : artist?.description ?
           <div id={descriptionId} ref={descriptionRef} className="now-artist-description" data-expanded={expanded}>{artist.description}</div> :
-          <p>No artist description available.</p>}
+          <p>no artist bio yet</p>}
       </div>
       <div className="now-artist-about-actions">
-        {failed && <button type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button>}
+        {failed && <button type="button" onClick={() => setRetry((value) => value + 1)}>try again</button>}
         {overflowing && <button type="button" aria-expanded={expanded} aria-controls={descriptionId} onClick={() => setExpanded((value) => !value)}>{expanded ? "Show less" : "Read more"}</button>}
       </div>
     </div>

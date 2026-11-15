@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Track } from "../../../mygo";
-import { artworkURL } from "../../../shared/ui/Artwork";
+import { preferredArtworkURL } from "../../../shared/ui/Artwork";
 
 export interface LyricsTheme {
   background: string;
@@ -290,5 +290,5 @@ export function useImageTheme(imageUrl: string | null | undefined, fallback: Lyr
 
 export function useArtworkTheme(track: Track | null | undefined): LyricsTheme {
   const rawUrl = track?.album_art_url || "";
-  return useImageTheme(artworkURL(rawUrl, 256) || rawUrl || null, DEFAULT_LYRICS_THEME);
+  return useImageTheme(preferredArtworkURL(rawUrl, 256) || rawUrl || null, DEFAULT_LYRICS_THEME);
 }

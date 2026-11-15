@@ -1,20 +1,50 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const loadedUrls = new Set<string>();
 const failedUrls = new Set<string>();
 const failedSources = new Set<string>();
+type LoadedArtwork = { url: string; width: number; height: number; requestedSize: number };
+const loadedSources = new Map<string, LoadedArtwork[]>();
 const MAX_ATTEMPTS = 2;
 
-function markLoaded(url: string) {
+export function rememberLoadedArtwork(src: string, url: string, width: number, height: number, requestedSize: number) {
+  if (!src || !url) return;
+  const key = artworkURL(src, 1) || src;
+  const previous = loadedSources.get(key) || [];
+  const variants = [...previous.filter((item) => item.url !== url), { url, width, height, requestedSize }];
+  variants.sort((a, b) => Math.min(a.width, a.height) - Math.min(b.width, b.height));
+  if (variants.length > 4) variants.splice(1, variants.length - 4);
+  if (loadedSources.size >= 1000 && !loadedSources.has(key)) loadedSources.delete(loadedSources.keys().next().value!);
+  loadedSources.set(key, variants);
+}
+
+export function loadedArtworkSource(src: string, size?: number): string {
+  const variants = loadedSources.get(artworkURL(src, 1) || src);
+  if (!variants?.length) return "";
+  return (size ? variants.find((item) => Math.min(item.width, item.height) >= size) || variants.at(-1) : variants.at(-1))?.url || "";
+}
+
+export function preferredArtworkURL(src: string, size: number): string {
+  const requested = artworkURL(src, size);
+  const variants = loadedSources.get(artworkURL(src, 1) || src) || [];
+  const cached = variants.find((item) => item.url === requested || (Math.min(item.width, item.height) >= size && Math.min(item.width, item.height) <= size * 1.5));
+  if (cached) return cached.url;
+  return requested;
+}
+
+function markLoaded(url: string, src: string, width: number, height: number, requestedSize: number) {
   failedUrls.delete(url);
+  failedSources.delete(src);
   if (loadedUrls.size >= 1000) loadedUrls.delete(loadedUrls.keys().next().value!);
   loadedUrls.add(url);
+  rememberLoadedArtwork(src, url, width, height, requestedSize);
 }
 
 function markFailed(url: string, src?: string) {
   loadedUrls.delete(url);
   if (failedUrls.size >= 1000) failedUrls.delete(failedUrls.keys().next().value!);
   failedUrls.add(url);
+  if (src && loadedArtworkSource(src)) return;
   if (src) {
     if (failedSources.size >= 1000) failedSources.delete(failedSources.keys().next().value!);
     failedSources.add(src);
@@ -39,7 +69,8 @@ export function artworkURL(src: string, size = 512) {
     if (url.protocol !== "https:" && url.protocol !== "http:") return "";
     if (url.protocol === "http:") url.protocol = "https:";
     if (url.hostname === "c.saavncdn.com") {
-      url.pathname = url.pathname.replace(/(?:50|150)x(?:50|150)/g, "500x500");
+      const pixels = size <= 50 ? 50 : size <= 150 ? 150 : 500;
+      url.pathname = url.pathname.replace(/(?:50|150|500)x(?:50|150|500)/g, `${pixels}x${pixels}`);
       return url.href;
     }
     if (url.hostname.endsWith("mzstatic.com")) {
@@ -70,7 +101,7 @@ export function artworkURL(src: string, size = 512) {
 }
 
 export function hasArtworkURL(src?: string): boolean {
-  if (!src || failedSources.has(src)) return false;
+  if (!src || (failedSources.has(src) && !loadedArtworkSource(src))) return false;
   try {
     const host = new URL(src).hostname;
     if (isYtimg(host)) return false;
@@ -82,19 +113,19 @@ export function hasArtworkURL(src?: string): boolean {
   return true;
 }
 
-const preloadQueue: Array<{ url: string; src: string }> = [];
+const preloadQueue: Array<{ url: string; src: string; size: number }> = [];
 const pendingUrls = new Set<string>();
 let preloading = 0;
 
-function preloadArtwork(url: string, src: string) {
+function preloadArtwork(url: string, src: string, size: number) {
   if (!url || loadedUrls.has(url) || failedUrls.has(url) || pendingUrls.has(url)) return;
   pendingUrls.add(url);
-  preloadQueue.push({ url, src });
+  preloadQueue.push({ url, src, size });
   warmArtwork();
 }
 
 export function preloadArtworkSource(src: string, size: number) {
-  preloadArtwork(artworkURL(src, size * 2), src);
+  preloadArtwork(preferredArtworkURL(src, size * 2), src, size * 2);
 }
 
 function warmArtwork() {
@@ -107,7 +138,7 @@ function warmArtwork() {
     const finish = (loaded: boolean) => {
       let allowWide = false;
       try { allowWide = isYtimg(new URL(item.url).hostname); } catch {}
-      if (loaded && isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide)) markLoaded(item.url);
+      if (loaded && isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide)) markLoaded(item.url, item.src, image.naturalWidth, image.naturalHeight, item.size);
       pendingUrls.delete(item.url);
       preloading--;
       warmArtwork();
@@ -118,20 +149,28 @@ function warmArtwork() {
   }
 }
 
-export function Artwork({ src, size, className = "", lazy = false, rootMargin = "1000px 800px", onFail, allowNonSquare = false }: { src: string; size: number; className?: string; lazy?: boolean; rootMargin?: string; onFail?: () => void; placeholder?: "music" | "user" | ReactNode; allowNonSquare?: boolean }) {
-  const url = artworkURL(src, size * 2);
+export function Artwork({ src, size, className = "", lazy = false, rootMargin = "1200px 800px", onFail, allowNonSquare = false }: { src: string; size: number; className?: string; lazy?: boolean; rootMargin?: string; onFail?: () => void; placeholder?: "music" | "user" | ReactNode; allowNonSquare?: boolean }) {
+  const density = Math.min(2, Math.max(1, window.devicePixelRatio * (Number.parseFloat(document.documentElement.style.zoom) || 1)));
+  const requestedSize = Math.ceil(size * density);
+  const url = useMemo(() => preferredArtworkURL(src, requestedSize), [src, requestedSize]);
+  const cached = loadedArtworkSource(src, requestedSize);
   const allowWide = allowNonSquare || (() => {
     try { return Boolean(src && isYtimg(new URL(src).hostname)); } catch { return false; }
   })();
   const ref = useRef<HTMLSpanElement>(null);
+  const visibleSource = useRef(src);
   const retryTimer = useRef<number | null>(null);
   const [visible, setVisible] = useState(!lazy || loadedUrls.has(url));
-  const [attempt, setAttempt] = useState(0);
-  const [loaded, setLoaded] = useState(() => Boolean(url && loadedUrls.has(url)));
-  const [failed, setFailed] = useState(() => Boolean(!url || failedUrls.has(url) || failedSources.has(src)));
-  const isLoaded = Boolean(url && (loadedUrls.has(url) || loaded));
-  const isFailed = Boolean(!url || failedUrls.has(url) || failedSources.has(src) || failed);
-  const loading = Boolean(url && !isLoaded && !isFailed);
+  const [retry, setRetry] = useState({ url, attempt: 0 });
+  const attempt = retry.url === url ? retry.attempt : 0;
+  const [loadedUrl, setLoadedUrl] = useState(() => loadedUrls.has(url) ? url : "");
+  const [displayedImage, setDisplayedImage] = useState(() => ({ src, url: loadedUrls.has(url) ? url : "" }));
+  const [failedUrl, setFailedUrl] = useState("");
+  const isLoaded = Boolean(url && (cached === url || loadedUrls.has(url) || loadedUrl === url));
+  const isFailed = Boolean(!url || (!isLoaded && (failedUrls.has(url) || (!cached && failedSources.has(src)) || failedUrl === url)));
+  const previousImage = displayedImage.src === src ? displayedImage.url : "";
+  const preview = previousImage && (previousImage !== url || isFailed) ? previousImage : cached && ((cached !== url && !isLoaded) || isFailed) ? cached : "";
+  const loading = Boolean(url && !isLoaded && !isFailed && !preview);
   const imageSrc = attempt > 0 && url ? `${url}${url.includes("?") ? "&" : "?"}retry=${attempt}` : url;
 
   useEffect(() => {
@@ -139,30 +178,27 @@ export function Artwork({ src, size, className = "", lazy = false, rootMargin = 
       window.clearTimeout(retryTimer.current);
       retryTimer.current = null;
     }
-    setAttempt(0);
-    setLoaded(Boolean(url && loadedUrls.has(url)));
-    setFailed(Boolean(!url || failedUrls.has(url) || failedSources.has(src)));
-    setVisible(!lazy || Boolean(url && loadedUrls.has(url)));
+    setRetry({ url, attempt: 0 });
+    setLoadedUrl(loadedUrls.has(url) ? url : "");
+    setFailedUrl("");
+    const sameSource = visibleSource.current === src;
+    visibleSource.current = src;
+    setVisible((previous) => !lazy || Boolean(url && loadedUrls.has(url)) || (sameSource && previous));
   }, [url, src, lazy]);
 
   useEffect(() => {
-    if (isFailed) onFail?.();
-  }, [isFailed, onFail]);
-
-  useEffect(() => {
-    if (!lazy || !url) return;
-    const timer = window.setTimeout(() => preloadArtwork(url, src), 250);
-    return () => window.clearTimeout(timer);
-  }, [url, src, lazy]);
+    if (isFailed && !cached) onFail?.();
+  }, [cached, isFailed, onFail]);
 
   useEffect(() => {
     if (!lazy || visible || !ref.current) return;
+    const options = { rootMargin, scrollMargin: "300px 400px" };
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setVisible(true);
         observer.disconnect();
       }
-    }, { rootMargin });
+    }, options);
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, [lazy, visible, rootMargin]);
@@ -171,43 +207,45 @@ export function Artwork({ src, size, className = "", lazy = false, rootMargin = 
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
   }, []);
 
-  if (!url || isFailed) {
+  if ((!url || isFailed) && !cached) {
     return <span className={`artwork ${className}`} data-loading="true" aria-hidden="true" />;
   }
 
   return <span ref={ref} className={`artwork ${className}`} data-loading={loading || undefined} aria-busy={loading}>
-    {(visible || isLoaded) && <img
+    {preview && <img className="artwork-preview loaded" src={preview} alt="" referrerPolicy="no-referrer" decoding="sync" />}
+    {!isFailed && (visible || isLoaded) && <img
       key={`${url}:${attempt}`}
       src={imageSrc}
       alt=""
       referrerPolicy="no-referrer"
-      decoding="async"
+      decoding={isLoaded ? "sync" : "async"}
       className={isLoaded ? "loaded" : ""}
       onLoad={(event) => {
         const image = event.currentTarget;
         if (isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide)) {
-          markLoaded(url);
-          setLoaded(true);
-          setFailed(false);
+          markLoaded(url, src, image.naturalWidth, image.naturalHeight, requestedSize);
+          setLoadedUrl(url);
+          setDisplayedImage({ src, url });
+          setFailedUrl("");
           return;
         }
         markFailed(url, src);
-        setFailed(true);
-        setLoaded(false);
+        setFailedUrl(url);
+        setLoadedUrl("");
       }}
       onError={() => {
         if (attempt + 1 >= MAX_ATTEMPTS) {
           markFailed(url, src);
-          setFailed(true);
-          setLoaded(false);
+          setFailedUrl(url);
+          setLoadedUrl("");
           return;
         }
         if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
         retryTimer.current = window.setTimeout(() => {
           retryTimer.current = null;
-          setLoaded(false);
-          setFailed(false);
-          setAttempt((value) => value + 1);
+          setLoadedUrl("");
+          setFailedUrl("");
+          setRetry({ url, attempt: attempt + 1 });
         }, 450 * (attempt + 1));
       }}
     />}
