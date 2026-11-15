@@ -11,8 +11,6 @@ export const LYRIC_SOURCES: { [key: string]: { name: string; url: string; notice
   simpmusic: { name: "SimpMusic", url: links.simp, notice: "Lyrics service" },
   amll: { name: "AMLL TTML Database", url: links.amll, notice: "CC0 contributions; other source terms vary" },
   kugou: { name: "KuGou", url: links.kugou, notice: "Lyrics service" },
-  youtube_music: { name: "YouTube Music", url: "https://music.youtube.com", notice: "Lyrics service" },
-  youtube_subtitle: { name: "YouTube", url: "https://www.youtube.com", notice: "Captions" },
 };
 
 function safeURL(url: string | undefined, origin: string): string {

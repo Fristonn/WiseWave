@@ -2411,6 +2411,25 @@ class LyricsRuntime extends ReactiveElement {
       }
     }
   }
+  syncWordWipes(time) {
+    const syncedWipes = new Set();
+    for (const index of this.activeLineIndices) {
+      const line = this._getLineElement(index);
+      if (!line) continue;
+      for (const { wipe } of LyricsRuntime.motionWords.get(line) || []) {
+        if (!wipe || syncedWipes.has(wipe)) continue;
+        syncedWipes.add(wipe);
+        for (const animation of wipe.animations) {
+          if (animation.playState === "idle") continue;
+          const epoch = wipe.epoch;
+          const end = Number(animation.effect?.getComputedTiming().endTime);
+          const elapsed = Math.max(0, Math.min(time - epoch, end));
+          if (animation.playState !== "paused") animation.pause();
+          if (animation.currentTime !== elapsed) animation.currentTime = elapsed;
+        }
+      }
+    }
+  }
   updatePlayedLines(time) {
     if (!this.lyrics) return;
     this.lyrics.forEach((line, index) => {

@@ -476,7 +476,7 @@ const ExistingLyrics = memo(function ExistingLyrics({
   };
 
   return (
-    <section className="relative isolate min-w-0 flex-1 overflow-hidden">
+    <section className="player-lyrics-section">
       {isLoading && (
         <div className="player-lyrics-loading" role="status">
           <div className="player-lyrics-loading-content">
@@ -495,29 +495,29 @@ const ExistingLyrics = memo(function ExistingLyrics({
         data-word-synced={wordSynced}
         ref={lyricsRef}
       >
-        <div className="min-h-full">
+        <div className="player-lyrics-inner">
           <div
             className={
-              synced ? "space-y-[38px] py-[50vh]" : "mx-auto max-w-4xl space-y-7 py-24"
+              synced ? "player-lyrics-synced-list" : "player-lyrics-unsynced-list"
             }
           >
             {unavailable ? (
-              <div className="absolute inset-0 grid place-items-center px-8 text-center">
-                <div className="max-w-lg space-y-2.5">
-                  <p className="text-xl font-semibold tracking-tight text-white">
-                    The song is here, the words aren&apos;t.
+              <div className="player-lyrics-empty">
+                <div className="player-lyrics-empty-box">
+                  <p className="player-lyrics-empty-title">
+                    the song is here, the words aren't
                   </p>
                   <p className="player-lyrics-empty-desc">
-                    We couldn&apos;t find a reliable lyrics match.
+                    we couldn't find lyrics for this song
                   </p>
                 </div>
               </div>
             ) : displayedLines.length ? (
               <>
                 {!synced && (
-                  <h2 className="player-lyrics-unsynced-header -mb-3 flex items-center gap-2 text-lg font-medium tracking-wide">
-                    <Clock3 aria-hidden="true" className="size-4" />
-                    These lyrics aren’t time-synced yet.
+                  <h2 className="player-lyrics-unsynced-header">
+                    <Clock3 aria-hidden="true" size={16} />
+                    these lyrics aren't synced yet
                   </h2>
                 )}
                 {displayedLines.map((line, index) => (

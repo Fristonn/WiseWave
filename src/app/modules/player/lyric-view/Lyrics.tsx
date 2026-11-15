@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Line, Track, Record } from "../../../mygo";
 import type { LyricLine } from "../../../types/lyricRenderer";
-import { artworkURL } from "../../../shared/ui/Artwork";
+import { artworkURL, loadedArtworkSource } from "../../../shared/ui/Artwork";
 import LyricsRenderer from "./LyricsRenderer";
 import { DEFAULT_LYRICS_THEME, useArtworkTheme } from "../shared/artworkColor";
 import { createPlaybackClock, type PlaybackClock } from "./playbackClock";
 import { normalizeLyricLines } from "./lyricLayout";
+
+function isEmbeddedCredit(text: string): boolean {
+  return /^\s*(?:lyrics?\s*(?:by)?|words\s*(?:by)?|written\s+by|songwriters?|lyricists?|composers?|composed\s+by|music\s+by|produced\s+by|publishers?|copyright)\s*[:：]\s*\S/i.test(text);
+}
 
 export function Lyrics({
   lines,
@@ -61,22 +65,23 @@ export function Lyrics({
     if (!value) return "";
     const normalized = value.toLowerCase().replace(/[.!]+$/g, "");
     if (normalized === "lyrics unavailable" || normalized === "no lyrics found" || normalized === "lyrics not found") return "";
-    return value;
+    return value.split(/\r?\n/).filter((line) => !isEmbeddedCredit(line)).join("\n").trim();
   }, [plain]);
+  const lyricLines = useMemo(() => lines.filter((line) => !isEmbeddedCredit(line.text || "")), [lines]);
   const normalized = useMemo<LyricLine[]>(() => {
     if (settings.lyr === false) {
-      const text = plainText ? plainText.split(/\r?\n/) : lines.filter((line) => !line.is_background).map((line) => line.text);
+      const text = plainText ? plainText.split(/\r?\n/) : lyricLines.filter((line) => !line.is_background).map((line) => line.text);
       return text.filter((line) => line?.trim()).map((text) => ({ text, startTimeMs: null }));
     }
-    return lines.length ? normalizeLyricLines(lines) : plainText.split(/\r?\n/).filter((line) => line.trim()).map((text) => ({ text, startTimeMs: null }));
-  }, [lines, plainText, settings.lyr]);
+    return lyricLines.length ? normalizeLyricLines(lyricLines) : plainText.split(/\r?\n/).filter((line) => line.trim()).map((text) => ({ text, startTimeMs: null }));
+  }, [lyricLines, plainText, settings.lyr]);
   const hasWords = useMemo(
     () => normalized.some((l) => l.syllables && l.syllables.length > 0),
     [normalized]
   );
   const type: "SYLLABLE_SYNCED" | "LINE_SYNCED" | "PLAIN" = settings.lyr === false ? "PLAIN" : hasWords
     ? "SYLLABLE_SYNCED"
-    : lines.length > 0
+    : lyricLines.length > 0
     ? "LINE_SYNCED"
     : "PLAIN";
 
@@ -87,12 +92,12 @@ export function Lyrics({
     [onSeek, offset]
   );
 
-  const unavailable = !loading && !lines.length && !plainText;
+  const unavailable = !loading && !lyricLines.length && !plainText;
   const dynamicBackground = settings.art !== false;
   const artworkTheme = useArtworkTheme(track);
   const theme = dynamicBackground ? artworkTheme : DEFAULT_LYRICS_THEME;
   const artworkSrc = track?.album_art_url || "";
-  const resolvedBackdrop = dynamicBackground && artworkSrc ? artworkURL(artworkSrc, 160) || artworkSrc : "";
+  const resolvedBackdrop = dynamicBackground && artworkSrc ? loadedArtworkSource(artworkSrc) || artworkURL(artworkSrc, 160) || artworkSrc : "";
   const [backdropUrl, setBackdropUrl] = useState(resolvedBackdrop);
   const [backdropFailed, setBackdropFailed] = useState(false);
 

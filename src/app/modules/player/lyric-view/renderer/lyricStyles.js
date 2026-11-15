@@ -130,6 +130,9 @@ export const lyricStyles = css`
     margin-block-end: var(--am-lyrics-line-spacing);
     position: relative;
   }
+  .lyrics-line:not(.lyrics-gap) {
+    z-index: 1;
+  }
   .lyrics-line:before {
     content: "";
     z-index: -1;
@@ -884,6 +887,7 @@ export const lyricStyles = css`
     overflow: visible;
     content-visibility: visible !important;
     contain: none !important;
+    z-index: 0;
   }
   .lyrics-gap.active {
     height: calc(

@@ -1,6 +1,6 @@
 const MAX_INTERPOLATION_MS = 1500;
 const CORRECTION_DURATION_MS = 180;
-const MAX_SMOOTH_DRIFT_MS = 120;
+const MAX_SMOOTH_DRIFT_MS = 1500;
 const MAX_UNCONFIRMED_JUMP_MS = 5000;
 
 export interface PlaybackClock {
@@ -50,16 +50,19 @@ export function createPlaybackClock(): PlaybackClock {
           return;
         }
       }
+      const wasPlaying = playing;
       pendingJump = null;
       ready = Boolean(nextTrackId);
       playing = nextPlaying;
       durationMs = nextDuration;
-      const drift = previousPosition - nextPosition;
-      correctionMs = trackId === nextTrackId && seekVersion === lastSeekVersion && ready && playing && Math.abs(drift) <= MAX_SMOOTH_DRIFT_MS ? drift : 0;
-      correctionDurationMs = CORRECTION_DURATION_MS;
+      const preservePosition = samePlayback && (!nextPlaying || !wasPlaying) && Math.abs(previousPosition - nextPosition) <= MAX_SMOOTH_DRIFT_MS;
+      const basePosition = preservePosition ? previousPosition : nextPosition;
+      const drift = previousPosition - basePosition;
+      correctionMs = samePlayback && ready && playing && Math.abs(drift) <= MAX_SMOOTH_DRIFT_MS ? drift : 0;
+      correctionDurationMs = Math.max(CORRECTION_DURATION_MS, correctionMs * 2);
       trackId = nextTrackId;
       lastSeekVersion = seekVersion;
-      positionMs = ready ? nextPosition : 0;
+      positionMs = ready ? basePosition : 0;
       receivedAt = now;
       notify();
     },

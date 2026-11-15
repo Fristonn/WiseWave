@@ -33,6 +33,7 @@ interface LyricsElement extends HTMLElement {
   reducedMotion: boolean;
   updateComplete: Promise<boolean>;
   resumeFollowing: () => void;
+  syncWordWipes: (time: number) => void;
   findInstrumentalGapAt: (time: number) => { insertBeforeIndex: number } | null;
 }
 
@@ -193,6 +194,7 @@ export default function NativeLyricsRenderer({
         for (const animation of (child as Element).getAnimations({ subtree: true })) {
           const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
           if (!(target instanceof Element) || !target.closest(".lyrics-word, .lyrics-syllable")) continue;
+          if (target.classList.contains("shared-word-wipe")) continue;
           if (advancing && animation.playState === "paused") animation.play();
           else if (!advancing && animation.playState === "running") animation.pause();
         }
@@ -202,7 +204,11 @@ export default function NativeLyricsRenderer({
     const tick = () => {
       frame = 0;
       if (disposed || !element || document.hidden) return;
-      if (clock.isReady()) element.currentTime = clock.read();
+      if (clock.isReady()) {
+        const time = clock.read();
+        element.currentTime = time;
+        element.syncWordWipes(time);
+      }
       updateFocus();
       const advancing = clock.isAdvancing();
       if (advancing !== wasAdvancing) updateWordPlayback(advancing);
@@ -314,7 +320,7 @@ export default function NativeLyricsRenderer({
       {failed && (
         <div className="native-lyrics-error">
           <button type="button" onClick={() => setRetry((value) => value + 1)}>
-            Lyrics couldn’t load. Try again.
+            couldn't load the lyrics. try again
           </button>
         </div>
       )}
