@@ -96,7 +96,7 @@ export function useLibrary() {
       setError("");
       return next;
     } catch {
-      setError("Library changes could not be saved.");
+      setError("couldn't save your library changes");
       return current;
     }
   });
@@ -220,8 +220,8 @@ export function useLibrary() {
       localStorage.setItem(key, JSON.stringify(next));
       setData(next); setError("");
     } catch {
-      setError("Library changes could not be saved.");
-      throw new Error("Library changes could not be saved.");
+      setError("couldn't save your library changes");
+      throw new Error("couldn't save your library changes");
     }
     return incoming.length;
   };

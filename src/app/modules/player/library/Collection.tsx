@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Clock3, Heart, ListMusic, Search } from "lucide-react";
 import type { Track } from "../../../mygo";
 import { formatAddedAt, type LibraryTrack, type Playlist } from "./useLibrary";
@@ -12,6 +12,7 @@ import { trackDurationLabel, trackDurationSeconds } from "../shared/trackDuratio
 import { LikedSongsCover } from "./LikedSongsCover";
 import { usePlaylistMenu } from "./PlaylistMenu";
 import { useSongMenu } from "../shared/SongMenu";
+import { DownloadsCover } from "../downloads/DownloadsCover";
 
 export function Collection({
   kind,
@@ -19,16 +20,22 @@ export function Collection({
   tracks,
   onPlay,
   onArtist,
+  onAlbum,
   current = null,
   playing = false,
+  children,
+  emptyState,
 }: {
-  kind: "liked" | "playlist";
+  kind: "liked" | "playlist" | "downloads";
   playlist?: Playlist;
   tracks: LibraryTrack[];
   onPlay: (track: Track, tracks: Track[], options?: { collection?: boolean }) => void;
   onArtist: (track: Track) => void;
+  onAlbum?: (id: string) => void;
   current?: Track | null;
   playing?: boolean;
+  children?: ReactNode;
+  emptyState?: ReactNode;
 }) {
   const openSongMenu = useSongMenu();
   const openPlaylistMenu = usePlaylistMenu();
@@ -58,12 +65,12 @@ export function Collection({
   const name =
     kind === "liked"
       ? "Liked Songs"
-      : playlist?.name || "Playlist";
+      : kind === "downloads" ? "Downloads" : playlist?.name || "Playlist";
 
   const searchPlaceholder =
     kind === "liked"
       ? "Search in Your Library"
-      : "Search in playlist";
+      : kind === "downloads" ? "Search in downloads" : "Search in playlist";
 
   const playlistArtwork = useMemo(() => {
     if (kind !== "playlist") return "";
@@ -74,11 +81,13 @@ export function Collection({
   const playlistTheme = useImageTheme(playlistArtwork || null, DEFAULT_PLAYLIST_THEME);
 
   return (
-    <section className={`player-scroll view-enter collection collection-${kind}`}>
+    <section className={`view-enter collection collection-${kind}`}>
       <div className="collection-header" style={kind === "playlist" ? { background: playlistTheme.gradient } : undefined} onContextMenu={(event) => { if (playlist) openPlaylistMenu(event, playlist); }}>
         <div className="collection-heading">
           {kind === "liked" ? (
             <LikedSongsCover className="collection-cover" />
+          ) : kind === "downloads" ? (
+            <DownloadsCover className="collection-cover" />
           ) : playlistArtwork && !(coverFailed && fallbackCoverFailed) ? (
             <Artwork
               className="collection-cover playlist-custom-cover"
@@ -95,7 +104,7 @@ export function Collection({
             </div>
           )}
           <div className="collection-heading-meta">
-            <p className="collection-header-category">Playlist</p>
+            <p className="collection-header-category">{kind === "downloads" ? "Your Library" : "Playlist"}</p>
             <h1 className="collection-header-title"><MarqueeText>{name}</MarqueeText></h1>
             {playlist?.description && (
               <p className="collection-header-desc"><MarqueeText>{playlist.description}</MarqueeText></p>
@@ -132,12 +141,14 @@ export function Collection({
           </label>
         </div>
 
+        {children}
+
         <div className="collection-table-header collection-library-table-header">
           <span className="col-num-header">#</span>
           <span className="collection-grid-cols collection-library-grid-cols">
             <span className="col-title-header">Title</span>
-            <span className="collection-meta-header">{kind === "liked" ? "Author" : "Album"}</span>
-            <span className="col-date-header">Date added</span>
+            <span className="collection-meta-header">{kind !== "playlist" ? "Author" : "Album"}</span>
+            <span className="col-date-header">{kind === "downloads" ? "downloaded" : "Date added"}</span>
             <Clock3 className="col-duration-icon" size={16} />
           </span>
         </div>
@@ -150,7 +161,7 @@ export function Collection({
               key={song.id}
               role="button"
               tabIndex={0}
-              onContextMenu={kind === "liked" ? (event) => openSongMenu(event, song, { kind: "liked" }) : undefined}
+              onContextMenu={kind !== "playlist" ? (event) => openSongMenu(event, song, kind === "liked" ? { kind: "liked" } : undefined) : undefined}
               onClick={() => onPlay(song, visibleSongs, { collection: true })}
               onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onPlay(song, visibleSongs, { collection: true }); } }}
             >
@@ -179,13 +190,13 @@ export function Collection({
                 </span>
 
                 <span className="collection-meta-cell">
-                  {kind === "liked" ? (
+                  {kind !== "playlist" ? (
                     <MarqueeText className="collection-meta-marquee song-author-marquee">
                       <ArtistLinks track={song} onOpen={onArtist} />
                     </MarqueeText>
                   ) : (
                     <MarqueeText className="collection-meta-marquee">
-                      {song.album || "—"}
+                      {song.album && song.album_id && onAlbum ? <span className="artist-links"><button type="button" onClick={(event) => { event.stopPropagation(); onAlbum(song.album_id); }}>{song.album}</button></span> : song.album || "—"}
                     </MarqueeText>
                   )}
                 </span>
@@ -205,19 +216,19 @@ export function Collection({
         {!visibleSongs.length &&
           (query ? (
             <p className="collection-empty-msg">
-              No songs in {name} match your search.
+              no songs in {name} match your search
             </p>
-          ) : kind === "liked" ? (
+          ) : emptyState ? emptyState : kind === "liked" ? (
             <div className="collection-empty-box">
               <Heart className="empty-icon" size={36} />
-              <strong className="empty-title">No liked songs yet</strong>
-              <p className="empty-subtitle">Songs you like will show up here.</p>
+              <strong className="empty-title">no liked songs yet</strong>
+              <p className="empty-subtitle">songs you like will show up here</p>
             </div>
           ) : (
             <div className="collection-empty-box">
               <ListMusic className="empty-icon" size={36} />
-              <strong className="empty-title">This playlist is empty</strong>
-              <p className="empty-subtitle">Songs you add will show up here.</p>
+              <strong className="empty-title">this playlist is empty</strong>
+              <p className="empty-subtitle">songs you add will show up here</p>
             </div>
           ))}
       </div>

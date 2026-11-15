@@ -34,7 +34,7 @@ export function loadArtist(id: string, name: string): Promise<ArtistDetail> {
     }
     if (!artistId) throw new Error("Artist not found.");
     const result = await Music.artist(artistId);
-    if (!result) throw new Error("Artist is unavailable.");
+    if (!result) throw new Error("couldn't load this artist");
     if (artistCache.size >= 24) artistCache.delete(artistCache.keys().next().value!);
     artistCache.set(key, { value: result, expires: Date.now() + 10 * 60_000 });
     return result;
@@ -72,7 +72,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
     setLoading(!cached); setError(""); setArtist(cached); setExpanded(false); setDescriptionOverflowing(false);
     setShowAll(false); setBannerFailed(false); setBannerLoaded(false); setMixLoading(false); setMixError("");
     void loadArtist(id, name).then((result) => { if (active) setArtist(result); }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : "Artist is unavailable.");
+      if (active) setError(reason instanceof Error ? reason.message : "couldn't load this artist");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; mixRequest.current++; };
   }, [id, name, retry]);
@@ -114,7 +114,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
     try {
       const related = await Music.related(seed.id);
       if (request === mixRequest.current) onPlay(seed, [seed, ...related.filter((track) => track.id !== seed.id)]);
-    } catch { if (request === mixRequest.current) setMixError("This artist mix could not be loaded. Try again."); }
+    } catch { if (request === mixRequest.current) setMixError("couldn't load this artist mix. try again"); }
     finally { if (request === mixRequest.current) setMixLoading(false); }
   };
   const banner = artist?.banner_url;
@@ -122,12 +122,12 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
 
   if (loading || error || !artist) return <div className="artist-page artist-page-status">
     {backButton}
-    {loading ? <p className="feed-message loading-state" role="status"><Classic />Loading artist…</p> : <><PlayerAlert message={error} onDismiss={() => {}} action={{ label: "Retry", onClick: () => setRetry((value) => value + 1) }} /><button className="artist-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button></>}
+    {loading ? <p className="feed-message loading-state" role="status"><Classic />loading artist…</p> : <><PlayerAlert message={error} onDismiss={() => {}} action={{ label: "retry", onClick: () => setRetry((value) => value + 1) }} /><button className="artist-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>try again</button></>}
   </div>;
 
   return <div className="artist-page">
     <header className="artist-hero" style={expanded ? { paddingTop: descriptionTop, alignItems: "flex-start" } : undefined}>
-      {banner && !bannerFailed && !bannerLoaded && <div className="artist-banner-loading" role="status" aria-label="Loading artist banner" />}
+      {banner && !bannerFailed && !bannerLoaded && <div className="artist-banner-loading" role="status" aria-label="loading artist banner" />}
       {banner && !bannerFailed && <img className={`artist-banner ${bannerLoaded ? "loaded" : ""}`} onLoad={() => setBannerLoaded(true)} fetchPriority="high" decoding="async" src={banner} alt="" referrerPolicy="no-referrer" onError={() => setBannerFailed(true)} />}
       {backButton}
       <div className="artist-hero-content" ref={contentRef}>
@@ -148,7 +148,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
           <button className="catalog-song-cover" type="button" aria-label={`Play ${track.title}`} onClick={() => play(track, tracks)}><Artwork src={track.album_art_url} size={48} lazy /><PlayingSpectrum active={current?.id === track.id} playing={playing} size={28} /><span><Play size={16} fill="currentColor" /></span></button>
           <div className="catalog-song-info"><button className="song-menu-title" type="button" onContextMenu={(event) => openSongMenu(event, track)} onClick={() => play(track, tracks)}><MarqueeText>{track.title}</MarqueeText></button><MarqueeText><ArtistLinks track={track} onOpen={onArtist} /></MarqueeText></div>
           <span className="catalog-song-duration">{trackDurationLabel(track)}</span>
-        </div>)}</div> : <p className="feed-message">No songs available for this artist.</p>}
+        </div>)}</div> : <p className="feed-message">no songs for this artist yet</p>}
         {tracks.length > 20 && <button className="artist-show-all" type="button" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : `Show all ${tracks.length} songs`}</button>}
       </section>
       <section className="artist-releases" aria-labelledby="artist-releases">
@@ -156,7 +156,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
         {artist.albums?.length ? <div className="artist-album-grid">{artist.albums.map((album) => <button type="button" className="artist-album" key={album.id} onClick={() => onAlbum(album.id)}>
           <span className="artist-album-cover"><Artwork src={album.artwork_url} size={192} lazy /><span><Play size={22} fill="currentColor" /></span></span>
           <MarqueeText>{album.title}</MarqueeText><small>{[album.year, "Album"].filter(Boolean).join(" · ")}</small>
-        </button>)}</div> : <p className="feed-message">No albums available for this artist.</p>}
+        </button>)}</div> : <p className="feed-message">no albums for this artist yet</p>}
       </section>
     </div>
   </div>;

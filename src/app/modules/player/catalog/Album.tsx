@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Clock3, Play, Shuffle } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock3, ListMusic, Play, Shuffle } from "lucide-react";
 import { Music, type AlbumDetail, type Track } from "../../../mygo";
 import { Artwork } from "../../../shared/ui/Artwork";
 import { PlayingSpectrum } from "../../../shared/ui/PlayingSpectrum";
@@ -23,8 +23,8 @@ export function Album({ id, onBack, onPlay, onArtist, current = null, playing = 
     void Music.album(id).then((value) => {
       if (!active) return;
       if (value) setAlbum(value);
-      else setError("Album is unavailable.");
-    }).catch(() => { if (active) setError("Album is unavailable."); });
+      else setError("couldn't load this album");
+    }).catch(() => { if (active) setError("couldn't load this album"); });
     return () => { active = false; };
   }, [id, retry]);
   const tracks = album?.tracks || [];
@@ -35,26 +35,33 @@ export function Album({ id, onBack, onPlay, onArtist, current = null, playing = 
   };
   if (!album) return <div className="artist-page artist-page-status">
     <button className="mix-back" type="button" onClick={onBack}><ArrowLeft size={18} /> Back</button>
-    {error ? <><PlayerAlert message={error} onDismiss={() => {}} action={{ label: "Retry", onClick: () => setRetry((value) => value + 1) }} /><button className="artist-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button></> : <p className="feed-message loading-state" role="status"><Classic />Loading album…</p>}
+    {error ? <><PlayerAlert message={error} onDismiss={() => {}} action={{ label: "retry", onClick: () => setRetry((value) => value + 1) }} /><button className="artist-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>try again</button></> : <p className="feed-message loading-state" role="status"><Classic />loading album…</p>}
   </div>;
   return <div className="album-page">
     <header className="album-hero">
+      {album.artwork_url && <div className="album-hero-background" aria-hidden="true"><Artwork src={album.artwork_url} size={512} /></div>}
       <button className="artist-back" type="button" aria-label="Back from album" onClick={onBack}><ArrowLeft size={20} /></button>
       <Artwork className="album-cover" src={album.artwork_url} size={224} />
       <div className="album-heading"><span className="detail-type">Album</span><h1>{album.title}</h1>
-        <p className="album-byline">{tracks[0] ? <ArtistLinks track={{ ...tracks[0], artist: album.artist || tracks[0].artist }} onOpen={onArtist} /> : album.artist}{album.year && <span>{album.year}</span>}<span>{tracks.length} {tracks.length === 1 ? "song" : "songs"}</span></p>
+        <div className="album-byline">
+          <div className="album-artist">{tracks[0] ? <ArtistLinks track={{ ...tracks[0], artist: album.artist || tracks[0].artist }} onOpen={onArtist} /> : album.artist}</div>
+          <div className="album-details">
+            {album.year && <span><CalendarDays aria-hidden="true" />Released in {album.year}</span>}
+            <span><ListMusic aria-hidden="true" />{tracks.length} {tracks.length === 1 ? "song" : "songs"} total</span>
+          </div>
+        </div>
         {album.description && <p className="album-description">{album.description}</p>}
         <div className="artist-hero-actions"><button type="button" disabled={!tracks.length} onClick={() => onPlay(tracks[0], tracks)}><Play size={18} fill="currentColor" />Play</button><button className="album-shuffle" type="button" disabled={!tracks.length} onClick={shuffle}><Shuffle size={19} />Shuffle</button></div>
       </div>
     </header>
     <section className="artist-catalog" aria-label="Album songs">
-      <div className="album-columns"><span>#</span><span>Title</span><Clock3 size={16} /></div>
+      <div className="album-columns"><span>#</span><span>Title</span><span className="album-duration-heading"><Clock3 size={16} aria-label="Duration" /></span></div>
       {tracks.length ? tracks.map((track, index) => <div className="catalog-song" key={track.id} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, .artist-links")) return; onPlay(track, tracks); }}>
         <span className="catalog-song-number">{index + 1}</span>
         <button className="catalog-song-cover" type="button" aria-label={`Play ${track.title}`} onClick={() => onPlay(track, tracks)}><Artwork src={album.artwork_url || track.album_art_url} size={48} lazy /><PlayingSpectrum active={current?.id === track.id} playing={playing} size={28} /><span><Play size={16} fill="currentColor" /></span></button>
         <div className="catalog-song-info"><button className="song-menu-title" type="button" onContextMenu={(event) => openSongMenu(event, { ...track, album_id: track.album_id || id })} onClick={() => onPlay(track, tracks)}><MarqueeText>{track.title}</MarqueeText></button><MarqueeText><ArtistLinks track={track} onOpen={onArtist} /></MarqueeText></div>
         <span className="catalog-song-duration">{trackDurationLabel(track)}</span>
-      </div>) : <p className="feed-message">No songs available for this album.</p>}
+      </div>) : <p className="feed-message">no songs in this album yet</p>}
     </section>
   </div>;
 }

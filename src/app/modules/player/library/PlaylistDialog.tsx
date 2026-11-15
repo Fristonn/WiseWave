@@ -27,7 +27,7 @@ export function PlaylistDialog({ onClose, onCreate, playlist }: { onClose: () =>
     const version = ++imageVersion.current;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
       setImageLoading(false);
-      setImageError("Choose a JPG, PNG or WebP image under 10 MB.");
+      setImageError("choose a jpg, png or webp image under 10 mb");
       return;
     }
     setImageLoading(true);
@@ -44,7 +44,7 @@ export function PlaylistDialog({ onClose, onCreate, playlist }: { onClose: () =>
         context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 320, 320);
         if (version === imageVersion.current) setCover(canvas.toDataURL("image/jpeg", 0.82));
       } catch {
-        if (version === imageVersion.current) setImageError("Could not load this image. Try another one.");
+        if (version === imageVersion.current) setImageError("couldn't load this image. try another one");
       } finally {
         URL.revokeObjectURL(url);
         if (version === imageVersion.current) setImageLoading(false);
@@ -52,7 +52,7 @@ export function PlaylistDialog({ onClose, onCreate, playlist }: { onClose: () =>
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      if (version === imageVersion.current) { setImageLoading(false); setImageError("Could not load this image. Try another one."); }
+      if (version === imageVersion.current) { setImageLoading(false); setImageError("couldn't load this image. try another one"); }
     };
     image.src = url;
   };

@@ -24,8 +24,8 @@ export function Playlist({ id, onBack, onPlay: play, onArtist, current = null, p
     void Music.playlist(id).then((value) => {
       if (!active) return;
       if (value) setPlaylist(value);
-      else setError("Playlist is unavailable.");
-    }).catch(() => { if (active) setError("Playlist is unavailable."); });
+      else setError("couldn't load this playlist");
+    }).catch(() => { if (active) setError("couldn't load this playlist"); });
     return () => { active = false; };
   }, [id, retry]);
   const tracks = playlist?.tracks || [];
@@ -36,7 +36,7 @@ export function Playlist({ id, onBack, onPlay: play, onArtist, current = null, p
   };
   if (!playlist) return <div className="artist-page artist-page-status">
     <button className="mix-back" type="button" onClick={onBack}><ArrowLeft size={18} /> Back</button>
-    {error ? <><PlayerAlert message={error} onDismiss={() => {}} action={{ label: "Retry", onClick: () => setRetry((value) => value + 1) }} /><button className="artist-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button></> : <p className="feed-message loading-state" role="status"><Classic />Loading playlist…</p>}
+    {error ? <><PlayerAlert message={error} onDismiss={() => {}} action={{ label: "retry", onClick: () => setRetry((value) => value + 1) }} /><button className="artist-secondary" type="button" onClick={() => setRetry((value) => value + 1)}>try again</button></> : <p className="feed-message loading-state" role="status"><Classic />loading playlist…</p>}
   </div>;
   return <div className="album-page">
     <header className="album-hero">
@@ -55,7 +55,7 @@ export function Playlist({ id, onBack, onPlay: play, onArtist, current = null, p
         <button className="catalog-song-cover" type="button" aria-label={`Play ${track.title}`} onClick={() => onPlay(track, tracks)}><Artwork src={track.album_art_url || playlist.artwork_url} size={48} lazy /><PlayingSpectrum active={current?.id === track.id} playing={playing} size={28} /><span><Play size={16} fill="currentColor" /></span></button>
         <div className="catalog-song-info"><button className="song-menu-title" type="button" onContextMenu={(event) => openSongMenu(event, track)} onClick={() => onPlay(track, tracks)}><MarqueeText>{track.title}</MarqueeText></button><MarqueeText><ArtistLinks track={track} onOpen={onArtist} /></MarqueeText></div>
         <span className="catalog-song-duration">{trackDurationLabel(track)}</span>
-      </div>) : <p className="feed-message">No songs available for this playlist.</p>}
+      </div>) : <p className="feed-message">no songs in this playlist yet</p>}
     </section>
   </div>;
 }

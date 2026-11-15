@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronRight, CirclePlus, Clipboard, Disc3, Heart, ListPlus, Plus, Radio, Search, Trash2, UserRound } from "lucide-react";
+import { ArrowDownToLine, Check, ChevronRight, CirclePlus, Clipboard, Disc3, Heart, ListPlus, Plus, Radio, Search, Trash2, UserRound } from "lucide-react";
 import { Clipboard as NativeClipboard, type Track } from "../../../mygo";
 import type { Playlist } from "../library/useLibrary";
 import { PlaylistDialog } from "../library/PlaylistDialog";
 import { artistNames } from "./ArtistLinks";
+import type { DownloadState } from "../downloads/useDownloads";
 
 type Location = { kind: "liked" } | { kind: "playlist"; id: string } | { kind: "queue"; index: number };
 type MenuState = { track: Track; x: number; y: number; location?: Location };
@@ -21,7 +22,7 @@ export function SongMenuTarget({ track, className, children }: { track: Track; c
   return <div className={className} onContextMenu={(event) => open(event, track)}>{children}</div>;
 }
 
-export function SongMenuProvider({ children, liked, playlists, onLike, onAdd, onCreateAndAdd, onRemove, onQueue, onRemoveQueue, onArtist, onAlbum, onRadio, onError }: {
+export function SongMenuProvider({ children, liked, playlists, onLike, onAdd, onCreateAndAdd, onRemove, onQueue, onRemoveQueue, onArtist, onAlbum, onRadio, onError, onDownload, downloadState }: {
   children: ReactNode;
   liked: Track[];
   playlists: Playlist[];
@@ -35,6 +36,8 @@ export function SongMenuProvider({ children, liked, playlists, onLike, onAdd, on
   onAlbum: (id: string, track: Track) => void;
   onRadio: (track: Track) => void;
   onError: (message: string) => void;
+  onDownload: (track: Track) => void;
+  downloadState: (id: string) => DownloadState;
 }) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [submenu, setSubmenu] = useState(false);
@@ -112,6 +115,7 @@ export function SongMenuProvider({ children, liked, playlists, onLike, onAdd, on
 
   const track = menu?.track;
   const saved = Boolean(track && liked.some((item) => item.id === track.id));
+  const download = track ? downloadState(track.id) : undefined;
   const firstArtist = track ? artistNames(track.artist)[0] : undefined;
   const playlistId = menu?.location?.kind === "playlist" ? menu.location.id : undefined;
   const queueIndex = menu?.location?.kind === "queue" ? menu.location.index : undefined;
@@ -130,19 +134,20 @@ export function SongMenuProvider({ children, liked, playlists, onLike, onAdd, on
           <div className="song-menu-divider" role="separator" />
           <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => perform(() => onLike(track))}><Heart fill={saved ? "currentColor" : "none"} /><span>{saved ? "Remove from Liked Songs" : "Save to Liked Songs"}</span></button>
           <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => perform(() => onQueue(track))}><ListPlus /><span>Add to queue</span></button>
+          <button type="button" role="menuitem" disabled={download === "saved" || download === "queued" || download === "downloading"} onPointerEnter={() => setSubmenu(false)} onClick={() => perform(() => onDownload(track))}>{download === "saved" ? <Check /> : <ArrowDownToLine />}<span>{download === "saved" ? "downloaded" : download === "queued" ? "queued for download" : download === "downloading" ? "downloading…" : download === "failed" ? "retry download" : "Download"}</span></button>
           <div className="song-menu-divider" role="separator" />
           <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => perform(() => onRadio(track))}><Radio /><span>Go to song radio</span></button>
           {firstArtist && <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => perform(() => onArtist({ ...track, artist: firstArtist }))}><UserRound /><span>Go to artist</span></button>}
           {track.album_id && <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => perform(() => onAlbum(track.album_id, track))}><Disc3 /><span>Go to album</span></button>}
           <div className="song-menu-divider" role="separator" />
-          <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => { void NativeClipboard.writeText(`https://music.youtube.com/watch?v=${encodeURIComponent(track.id)}`).catch(() => onError("Could not copy the song link.")); close(true); }}><Clipboard /><span>Copy song link</span></button>
+          <button type="button" role="menuitem" onPointerEnter={() => setSubmenu(false)} onClick={() => { void NativeClipboard.writeText(`https://music.youtube.com/watch?v=${encodeURIComponent(track.id)}`).catch(() => onError("couldn't copy the song link")); close(true); }}><Clipboard /><span>Copy song link</span></button>
         </div>
         {submenu && <div className={`song-menu-submenu ${position.flip ? "flip" : ""}`} role="menu" aria-label="Add to playlist">
           <button type="button" role="menuitem" onClick={() => { setCreateFor(track); close(); }}><Plus /><span>New playlist</span></button>
           <label className="song-menu-search"><Search /><input aria-label="Find a playlist" placeholder="Find a playlist" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
           <div className="song-menu-playlists">
             {matching.map((playlist) => { const contains = playlist.tracks.some((item) => item.id === track.id); return <button type="button" role="menuitem" key={playlist.id} disabled={contains} onClick={() => perform(() => onAdd(playlist.id, track))}><span>{playlist.name}</span>{contains && <Check />}</button>; })}
-            {!matching.length && <p>{playlists.length ? "No playlists found" : "No playlists yet"}</p>}
+            {!matching.length && <p>{playlists.length ? "no playlists found" : "no playlists yet"}</p>}
           </div>
         </div>}
       </div>, document.body

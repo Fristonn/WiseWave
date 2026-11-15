@@ -13,6 +13,33 @@ export function usePlaylistMenu() {
   return open;
 }
 
+function DeletePlaylistDialog({ playlist, onCancel, onConfirm }: { playlist: Playlist; onCancel: () => void; onConfirm: () => void }) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const cancel = useRef(onCancel);
+  cancel.current = onCancel;
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel.current(); }
+      if (event.key === "Tab") {
+        const buttons = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") || []);
+        if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons[buttons.length - 1]?.focus(); }
+        else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) { event.preventDefault(); buttons[0]?.focus(); }
+      }
+    };
+    document.addEventListener("keydown", keydown, true);
+    return () => { document.removeEventListener("keydown", keydown, true); previous?.focus(); };
+  }, []);
+  return createPortal(<div className="playlist-dialog-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+    <div className="playlist-delete-dialog" ref={dialog} role="alertdialog" aria-modal="true" aria-labelledby="playlist-delete-title" aria-describedby="playlist-delete-description">
+      <h2 id="playlist-delete-title">Delete this playlist?</h2>
+      <p id="playlist-delete-description">This will delete <strong>{playlist.name}</strong> from your library.</p>
+      <div className="playlist-delete-actions"><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={onConfirm}>Delete</button></div>
+    </div>
+  </div>, document.body);
+}
+
 export function PlaylistMenuProvider({ children, playlists, onPlay, onQueue, onEdit, onDelete }: {
   children: ReactNode;
   playlists: Playlist[];
@@ -23,10 +50,12 @@ export function PlaylistMenuProvider({ children, playlists, onPlay, onQueue, onE
 }) {
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const playlist = playlists.find((item) => item.id === menu?.id);
   const editPlaylist = playlists.find((item) => item.id === editing);
+  const deletePlaylist = playlists.find((item) => item.id === deleting);
   const close = (restore = false) => {
     setMenu(null);
     if (restore) previousFocus.current?.focus();
@@ -79,6 +108,7 @@ export function PlaylistMenuProvider({ children, playlists, onPlay, onQueue, onE
   return <Context.Provider value={open}>
     {children}
     {editPlaylist && <PlaylistDialog playlist={editPlaylist} onClose={() => setEditing(null)} onCreate={(name, description, cover) => { onEdit(editPlaylist.id, name, description, cover); setEditing(null); }} />}
+    {deletePlaylist && <DeletePlaylistDialog playlist={deletePlaylist} onCancel={() => setDeleting(null)} onConfirm={() => { onDelete(deletePlaylist); setDeleting(null); }} />}
     {menu && playlist && createPortal(<div ref={root} className="song-menu" onContextMenu={(event) => event.preventDefault()}>
       <div className="song-menu-list" role="menu" aria-label={`Actions for ${playlist.name}`}>
         <button type="button" role="menuitem" disabled={!playlist.tracks.length} onClick={() => { onPlay(playlist); close(true); }}><Play /><span>Play</span></button>
@@ -86,7 +116,7 @@ export function PlaylistMenuProvider({ children, playlists, onPlay, onQueue, onE
         <div className="song-menu-divider" role="separator" />
         <button type="button" role="menuitem" onClick={() => { close(true); setEditing(playlist.id); }}><Pencil /><span>Edit details</span></button>
         <div className="song-menu-divider" role="separator" />
-        <button type="button" role="menuitem" className="song-menu-danger" onClick={() => { onDelete(playlist); close(true); }}><Trash2 /><span>Delete</span></button>
+        <button type="button" role="menuitem" className="song-menu-danger" onClick={() => { close(true); setDeleting(playlist.id); }}><Trash2 /><span>Delete</span></button>
       </div>
     </div>, document.body)}
   </Context.Provider>;
