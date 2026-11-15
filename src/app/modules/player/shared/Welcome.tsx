@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Coffee, ExternalLink, Globe, Star, UserRound, X } from "lucide-react";
-import appIcon from "../../../../../resources/images/icon.png";
-import { appVersion } from "../../../version";
+import { ExternalLink, Globe, Star, UserRound } from "lucide-react";
+import welcomeProfile from "../../../../../resources/images/welcome-profile.jpg";
 import { linkLabel, links } from "../../../shared/links";
 
 const WELCOME_SEEN_KEY = "wisewave-welcome-seen";
@@ -98,6 +97,14 @@ function DiscordIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+function GitHubIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.9.83.09-.64.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
+    </svg>
+  );
+}
+
 function WelcomeRow({
   href,
   icon,
@@ -190,14 +197,15 @@ export function Welcome({ close }: { close: () => void }) {
     <div className={`welcome-overlay ${closing ? "welcome-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
       <div className="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title" tabIndex={-1} ref={dialog}>
         <header className="welcome-intro">
-          <img className="welcome-mark" src={appIcon} alt="" />
-          <div className="welcome-intro-copy">
-            <h1 id="welcome-title">WiseWave <span>{appVersion}</span></h1>
-            <p className="welcome-note">Hey, thanks for using WiseWave. Hope you like it.</p>
+          <div className="welcome-cover" aria-hidden="true"><img src={welcomeProfile} alt="" /></div>
+          <div className="welcome-who">
+            <img className="welcome-pfp" src={welcomeProfile} alt="" />
+            <div className="welcome-who-copy">
+              <h1 id="welcome-title">Friston</h1>
+              <p className="welcome-role">i was bored so i made this lol..</p>
+            </div>
           </div>
-          <button className="welcome-close" type="button" aria-label="Close acknowledgement" onClick={dismiss}>
-            <X size={18} />
-          </button>
+          <p className="welcome-note">i love music and i think everyone should get to enjoy it without all the bs so i made wisewave so you can listen as long as you want to?<br />well..if you think something could be better feel free to let me know</p>
         </header>
 
         <div
@@ -205,13 +213,12 @@ export function Welcome({ close }: { close: () => void }) {
           ref={bodyRef}
         >
           <div className="welcome-grid">
-            <WelcomeSection title="Follow Developer">
-              <Friend href={links.github} name="GitHub">{linkLabel(links.github)}</Friend>
-              <WelcomeRow href={links.discord} icon={<DiscordIcon />} title="Friston" subtitle="idk what to write here lol" />
+            <WelcomeSection title="Find me">
+              <WelcomeRow href={links.github} icon={<GitHubIcon />} title="GitHub" subtitle={linkLabel(links.github)} />
+              <WelcomeRow href={links.discord} icon={<DiscordIcon />} title="Discord" subtitle="connect with me on Discord" />
             </WelcomeSection>
 
-            <WelcomeSection title="Support WiseWave">
-              <WelcomeRow href={links.site} icon={<Coffee size={18} strokeWidth={1.8} />} title="Support the project" subtitle={linkLabel(links.site)} />
+            <WelcomeSection title="Support">
               <WelcomeRow href={links.site} icon={<Globe size={18} strokeWidth={1.8} />} title="Website" subtitle="News, downloads, and updates" />
             </WelcomeSection>
 
@@ -233,7 +240,7 @@ export function Welcome({ close }: { close: () => void }) {
             Star on GitHub
           </a>
           <button className="welcome-continue" type="button" onClick={dismiss}>
-            Continue
+            Let’s go
           </button>
         </div>
       </div>

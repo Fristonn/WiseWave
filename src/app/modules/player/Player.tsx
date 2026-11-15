@@ -9,7 +9,7 @@ import { SettingsLottieIcon } from "../settings/SettingsIcon";
 import { ResizeHandle } from "./shared/ResizeHandle";
 import { MarqueeText } from "../../shared/ui/MarqueeText";
 import { Feed } from "./catalog/Feed";
-import { NowArtwork, type NowMediaOpen } from "./playback/NowArtwork";
+import { NowArtwork } from "./playback/NowArtwork";
 import { FullscreenPlayer } from "./playback/FullscreenPlayer";
 import { PlayerBar } from "./playback/PlayerBar";
 import { SearchBox } from "./search/SearchBox";
@@ -32,7 +32,9 @@ import { Lyrics } from "./lyric-view/Lyrics";
 import { PlayerAlert } from "./shared/PlayerAlert";
 import { ArtworkViewer } from "./shared/ArtworkViewer";
 import { SongMenuProvider, SongMenuTarget } from "./shared/SongMenu";
-type Page = { view: "home" | "search" | "mix" | "lyrics" | "artist" | "liked" | "playlist" | "album"; albumId?: string; query?: string; category?: SearchCategory; mix?: Track; artist?: { artist: string; artist_id?: string }; playlistId?: string };
+import { Downloads } from "./downloads/Downloads";
+import { useDownloads } from "./downloads/useDownloads";
+type Page = { view: "home" | "search" | "mix" | "lyrics" | "artist" | "liked" | "playlist" | "album" | "downloads"; albumId?: string; query?: string; category?: SearchCategory; mix?: Track; artist?: { artist: string; artist_id?: string }; playlistId?: string };
 const LAST_PAGE_KEY = "wisewave-last-page";
 const loadSettings = () => import("../settings/Settings");
 const Settings = lazy(() => loadSettings().then((module) => ({ default: module.Settings })));
@@ -43,7 +45,7 @@ function readLastPage(): { page: Page; scroll: number } {
   try {
     const saved = JSON.parse(localStorage.getItem(LAST_PAGE_KEY) || "null");
     let page = saved?.page;
-    if (!page || !["home", "search", "mix", "lyrics", "artist", "liked", "playlist", "album"].includes(page.view)) return fallback;
+    if (!page || !["home", "search", "mix", "lyrics", "artist", "liked", "playlist", "album", "downloads"].includes(page.view)) return fallback;
     if (page.view === "search" && typeof page.query !== "string") return fallback;
     if (page.view === "album" && typeof page.albumId !== "string") return fallback;
     if (page.view === "playlist" && typeof page.playlistId !== "string") return fallback;
@@ -74,7 +76,7 @@ export function Player() {
   const openFullscreen = useCallback(() => { if (!closingFullscreen.current) setFullscreen(true); }, []);
   const closeFullscreen = useCallback(() => { closingFullscreen.current = true; setFullscreen(false); }, []);
   const [nowPlaying, setNowPlaying] = useState(true);
-  const [mediaViewer, setMediaViewer] = useState<NowMediaOpen | null>(null);
+  const [mediaViewer, setMediaViewer] = useState(false);
   const [libraryWidth, setLibraryWidth] = useState(335);
   const [nowPlayingWidth, setNowPlayingWidth] = useState(320);
   const [resizing, setResizing] = useState(false);
@@ -86,7 +88,7 @@ export function Player() {
       if (!fullscreen) closingFullscreen.current = false;
     }).catch(() => {
       if (active) {
-        music.setError(fullscreen ? "Could not enter full screen." : "Could not restore the player window.");
+        music.setError(fullscreen ? "couldn't open full screen" : "couldn't restore the player window");
         if (fullscreen) closeFullscreen();
       }
       if (!fullscreen) closingFullscreen.current = false;
@@ -98,6 +100,7 @@ export function Player() {
       .catch((error: unknown) => console.warn("Could not restore the player window.", error));
   }, []);
   const library = useLibrary();
+  const downloads = useDownloads();
   useEffect(() => {
     if (music.track?.id && music.duration > 0) library.ensureDuration(music.track.id, music.duration);
   }, [music.track?.id, music.duration]);
@@ -207,7 +210,7 @@ export function Player() {
   const [miniOpen, setMiniOpen] = useState(false);
   const miniChannel = useRef<BroadcastChannel | null>(null);
   const miniArtist = useRef<(track: Track) => void>(() => {});
-  miniArtist.current = (artist) => { navigate({ view: "artist", artist }); void TrayControl.action("open").catch(() => music.setError("Could not open the player.")); };
+  miniArtist.current = (artist) => { navigate({ view: "artist", artist }); void TrayControl.action("open").catch(() => music.setError("couldn't open the player")); };
   const miniActions = useRef({ previous: () => {}, next: () => {}, toggle: () => {}, mute: () => {}, seek: (_value: number) => {}, volume: (_value: number) => {}, like: () => {} });
   miniActions.current = { previous: music.previous, next: music.next, toggle: music.toggle, mute: music.toggleMute, seek: music.seek, volume: music.changeVolume, like: () => { if (music.track) library.toggleLike(music.track); } };
   const isLiked = Boolean(music.track && library.liked.some((item) => item.id === music.track?.id));
@@ -236,7 +239,7 @@ export function Player() {
     return () => { bus.close(); miniChannel.current = null; };
   }, []);
   useEffect(() => { if (miniOpen) miniChannel.current?.postMessage({ type: "state", state: miniState }); }, [miniOpen, music.track, music.playing, music.position, music.duration, music.volume, music.muted, music.queue.length, music.upNext.length, music.repeatMode, music.autoplay, isLiked]);
-  const toggleMini = () => { void (miniOpen ? MiniWindow.close() : MiniWindow.open()).then(() => setMiniOpen(!miniOpen)).catch(() => music.setError("Mini player could not be opened.")); };
+  const toggleMini = () => { void (miniOpen ? MiniWindow.close() : MiniWindow.open()).then(() => setMiniOpen(!miniOpen)).catch(() => music.setError("couldn't open the mini player")); };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
@@ -296,7 +299,7 @@ export function Player() {
     }, cached ? 0 : 350);
     return () => { active = false; window.clearTimeout(timer); };
   }, [query]);
-  return <PlaylistMenuProvider playlists={library.playlists} onEdit={library.edit} onDelete={(playlist) => { library.removePlaylist(playlist.id); if (page.view === "playlist" && page.playlistId === playlist.id) navigate({ view: "home" }); }} onPlay={(playlist) => { if (playlist.tracks.length) music.play(playlist.tracks[0], playlist.tracks, { collection: true }); }} onQueue={(playlist) => music.setQueue((items) => [...items, ...playlist.tracks.filter((track, index, tracks) => !items.some((item) => item.id === track.id) && tracks.findIndex((item) => item.id === track.id) === index)])}><SongMenuProvider liked={library.liked} playlists={library.playlists} onLike={library.toggleLike} onAdd={library.add} onCreateAndAdd={(name, description, track, cover) => { const playlist = library.create(name, description, cover); library.add(playlist.id, track); }} onRemove={library.remove} onRemoveQueue={(index, track) => music.setQueue((items) => items[index]?.id === track.id ? items.filter((_, itemIndex) => itemIndex !== index) : items)} onQueue={(track) => music.setQueue((items) => items.some((item) => item.id === track.id) ? items : [...items, track])} onArtist={(track) => navigate({ view: "artist", artist: { artist: track.artist, artist_id: track.artist_id } })} onAlbum={(id) => navigate({ view: "album", albumId: id })} onRadio={(track) => navigate({ view: "mix", mix: track })} onError={music.setError}><>
+  return <PlaylistMenuProvider playlists={library.playlists} onEdit={library.edit} onDelete={(playlist) => { library.removePlaylist(playlist.id); if (page.view === "playlist" && page.playlistId === playlist.id) navigate({ view: "home" }); }} onPlay={(playlist) => { if (playlist.tracks.length) music.play(playlist.tracks[0], playlist.tracks, { collection: true }); }} onQueue={(playlist) => music.setQueue((items) => [...items, ...playlist.tracks.filter((track, index, tracks) => !items.some((item) => item.id === track.id) && tracks.findIndex((item) => item.id === track.id) === index)])}><SongMenuProvider onDownload={downloads.download} downloadState={downloads.state} liked={library.liked} playlists={library.playlists} onLike={library.toggleLike} onAdd={library.add} onCreateAndAdd={(name, description, track, cover) => { const playlist = library.create(name, description, cover); library.add(playlist.id, track); }} onRemove={library.remove} onRemoveQueue={(index, track) => music.setQueue((items) => items[index]?.id === track.id ? items.filter((_, itemIndex) => itemIndex !== index) : items)} onQueue={(track) => music.setQueue((items) => items.some((item) => item.id === track.id) ? items : [...items, track])} onArtist={(track) => navigate({ view: "artist", artist: { artist: track.artist, artist_id: track.artist_id } })} onAlbum={(id) => navigate({ view: "album", albumId: id })} onRadio={(track) => navigate({ view: "mix", mix: track })} onError={music.setError}><>
     {fullscreen && <FullscreenPlayer music={music} onClose={closeFullscreen} liked={isLiked} onLike={() => { if (music.track) library.toggleLike(music.track); }} />}
     <PlayerSurface suspended={fullscreen}>
     <header className="topbar">
@@ -305,19 +308,20 @@ export function Player() {
       <div className="top-spacer"><Connection music={music} /><Tooltip label={music.privateListening ? "Private listening on" : "Private listening off"}><button className="privacy-trigger" type="button" aria-label={music.privateListening ? "Private listening on. Show activity on Discord" : "Private listening off. Hide activity on Discord"} aria-pressed={music.privateListening} onClick={music.togglePrivateListening}>{music.privateListening ? <LockKeyhole size={20} /> : <LockKeyholeOpen size={20} />}</button></Tooltip><Tooltip label="Settings"><button className="settings-trigger" type="button" aria-label="Settings" aria-pressed={settingsOpen} onPointerEnter={preloadSettings} onFocus={preloadSettings} onClick={() => { setSettingsClicks((value) => value + 1); setSettingsOpen(true); }}><SettingsLottieIcon clicks={settingsClicks} /></button></Tooltip></div>
     </header>
     <div className="workspace">
-      <><Library width={libraryWidth} liked={library.liked} playlists={library.playlists} active={page.playlistId || page.view} onOpen={(id) => {
+      <><Library downloadCount={downloads.saved.length} downloadingCount={downloads.jobs.filter((job) => job.status !== "failed").length} width={libraryWidth} liked={library.liked} playlists={library.playlists} active={page.playlistId || page.view} onOpen={(id) => {
         if (id === "liked") navigate({ view: "liked" });
+        else if (id === "downloads") navigate({ view: "downloads" });
         else navigate({ view: "playlist", playlistId: id });
       }} onCreate={(name, description, cover) => { const playlist = library.create(name, description, cover); navigate({ view: "playlist", playlistId: playlist.id }); }} /><ResizeHandle label="Resize library sidebar" min={280} max={420} value={libraryWidth} onChange={setLibraryWidth} /></>
-      <section ref={homeRef} className={`home-view player-scroll ${page.view === "mix" ? "mix-mode" : ""}`}>
-        {page.view === "album" && page.albumId ? <Album id={page.albumId} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} current={music.track} playing={music.playing} /> : page.view === "liked" || (page.view === "playlist" && library.playlists.some((item) => item.id === page.playlistId)) ? <Collection key={page.playlistId || page.view} kind={page.view === "liked" ? "liked" : "playlist"} playlist={library.playlists.find((item) => item.id === page.playlistId)} onArtist={(artist) => navigate({ view: "artist", artist })} tracks={page.view === "liked" ? library.liked : library.playlists.find((item) => item.id === page.playlistId)?.tracks || []} onPlay={music.play} current={music.track} playing={music.playing} /> : page.view === "playlist" && page.playlistId ? <CatalogPlaylistView id={page.playlistId} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} current={music.track} playing={music.playing} /> : page.view === "artist" && page.artist ? <Artist key={page.artist.artist_id || page.artist.artist} id={page.artist.artist_id || ""} name={page.artist.artist} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} onAlbum={(albumId) => navigate({ view: "album", albumId })} current={music.track} playing={music.playing} /> : lyricsOpen && music.track ? <Lyrics credit={music.lyricsCredit} seekVersion={music.seekVersion} lines={music.lyrics} plain={music.plainLyrics} loading={music.lyricsLoading} position={music.position} duration={music.duration} playing={music.playing && !fullscreen} track={music.track} onSeek={music.seek} /> : <Feed history={music.history} popular={music.popular} forYou={music.forYou} searchResults={results} albumResults={albumResults} artistResults={artistResults} playlistResults={playlistResults} searchLoading={searchLoading} searchError={searchError} searchQuery={query.trim()} searchCategory={page.category || "All"} onSearchCategory={setSearchCategory} onPlay={(track, tracks) => { if (query.trim()) saveSearch.current(query); music.play(track, tracks); }} mix={page.view === "mix" ? page.mix || null : null} onMix={(mix) => navigate(mix ? { view: "mix", mix } : { view: "home" })} onArtist={(artist) => { if (query.trim()) saveSearch.current(query); navigate({ view: "artist", artist }); }} onAlbum={(albumId) => { if (query.trim()) saveSearch.current(query); navigate({ view: "album", albumId }); }} onPlaylist={(playlistId) => { if (query.trim()) saveSearch.current(query); navigate({ view: "playlist", playlistId }); }} liked={library.liked} playlists={library.playlists} onLike={library.toggleLike} onAdd={library.add} current={music.track} playing={music.playing} queue={music.queue} onQueue={(track) => { if (query.trim()) saveSearch.current(query); music.setQueue((items) => items.some((item) => item.id === track.id) ? items : [...items, track]); }} />}
+      <section ref={homeRef} className="home-view player-scroll">
+        {page.view === "downloads" ? <Downloads saved={downloads.saved} jobs={downloads.jobs} loading={downloads.loading} error={downloads.error} onReload={downloads.reload} onRetry={downloads.download} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} current={music.track} playing={music.playing} /> : page.view === "album" && page.albumId ? <Album id={page.albumId} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} current={music.track} playing={music.playing} /> : page.view === "liked" || (page.view === "playlist" && library.playlists.some((item) => item.id === page.playlistId)) ? <Collection key={page.playlistId || page.view} kind={page.view === "liked" ? "liked" : "playlist"} playlist={library.playlists.find((item) => item.id === page.playlistId)} onArtist={(artist) => navigate({ view: "artist", artist })} onAlbum={(albumId) => navigate({ view: "album", albumId })} tracks={page.view === "liked" ? library.liked : library.playlists.find((item) => item.id === page.playlistId)?.tracks || []} onPlay={music.play} current={music.track} playing={music.playing} /> : page.view === "playlist" && page.playlistId ? <CatalogPlaylistView id={page.playlistId} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} current={music.track} playing={music.playing} /> : page.view === "artist" && page.artist ? <Artist key={page.artist.artist_id || page.artist.artist} id={page.artist.artist_id || ""} name={page.artist.artist} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onPlay={music.play} onArtist={(artist) => navigate({ view: "artist", artist })} onAlbum={(albumId) => navigate({ view: "album", albumId })} current={music.track} playing={music.playing} /> : lyricsOpen && music.track ? <Lyrics credit={music.lyricsCredit} seekVersion={music.seekVersion} lines={music.lyrics} plain={music.plainLyrics} loading={music.lyricsLoading} position={music.position} duration={music.duration} playing={music.playing && !fullscreen} track={music.track} onSeek={music.seek} /> : <Feed history={music.history} popular={music.popular} forYou={music.forYou} searchResults={results} albumResults={albumResults} artistResults={artistResults} playlistResults={playlistResults} searchLoading={searchLoading} searchError={searchError} searchQuery={query.trim()} searchCategory={page.category || "All"} onSearchCategory={setSearchCategory} onPlay={(track, tracks) => { if (query.trim()) saveSearch.current(query); music.play(track, tracks); }} mix={page.view === "mix" ? page.mix || null : null} onMix={(mix) => navigate(mix ? { view: "mix", mix } : { view: "home" })} onBack={() => pageIndex > 0 ? goHistory(pageIndex - 1) : navigate({ view: "home" })} onArtist={(artist) => { if (query.trim()) saveSearch.current(query); navigate({ view: "artist", artist }); }} onAlbum={(albumId) => { if (query.trim()) saveSearch.current(query); navigate({ view: "album", albumId }); }} onPlaylist={(playlistId) => { if (query.trim()) saveSearch.current(query); navigate({ view: "playlist", playlistId }); }} liked={library.liked} playlists={library.playlists} onLike={library.toggleLike} onAdd={library.add} current={music.track} playing={music.playing} queue={music.queue} onQueue={(track) => { if (query.trim()) saveSearch.current(query); music.setQueue((items) => items.some((item) => item.id === track.id) ? items : [...items, track]); }} />}
       </section>
       {nowPlaying && <ResizeHandle invert label="Resize now playing sidebar" min={240} max={480} value={nowPlayingWidth} onChange={setNowPlayingWidth} onDraggingChange={setResizing} />}
       <aside className={`now-playing ${nowPlaying ? "" : "collapsed"} ${resizing ? "resizing" : ""}`} style={{ width: nowPlaying ? nowPlayingWidth : 56 }}>
         {nowPlaying ? <div className="now-playing-content player-scroll">
           {music.track ? <div className="now-track">
             <div className="now-hero">
-              <NowArtwork track={music.track} playing={music.playing && !fullscreen} onOpen={setMediaViewer} />
+              <NowArtwork track={music.track} playing={music.playing && !fullscreen} onOpen={() => setMediaViewer(true)} />
               <div className="now-heading now-heading-overlay">
                 <IconButton label="Close now playing view" onClick={() => setNowPlaying(false)}><PanelRight size={16} /></IconButton>
                 <strong>Now playing</strong>
@@ -336,12 +340,12 @@ export function Player() {
         </div> : <IconButton label="Open now playing view" onClick={() => setNowPlaying(true)}><ChevronLeft size={36} /></IconButton>}
       </aside>
     </div>
-    {mediaViewer && music.track && <ArtworkViewer track={music.track} videoUrl={mediaViewer.kind === "canvas" ? mediaViewer.url : undefined} playing={music.playing} onClose={() => setMediaViewer(null)} />}
-    {settingsOpen && <Suspense fallback={null}><Settings onClose={() => setSettingsOpen(false)} onClearHistory={music.clearHistory} autoplay={music.autoplay} onAutoplay={music.setAutoplay} repeat={music.repeat} onRepeat={music.setRepeat} discordEnabled={music.discordEnabled} onDiscordEnabled={music.toggleDiscord} track={music.track} position={music.position} duration={music.duration} onImportSpotify={(result) => library.importCollection({ liked: Boolean(result?.liked), sourceId: result?.source_id || "", title: result?.title || "", cover: result?.cover_url || "", tracks: result?.tracks || [] })} onImportYouTube={(result) => library.importCollection({ provider: "youtube", liked: Boolean(result?.liked), sourceId: result?.source_id || "", title: result?.title || "", cover: result?.cover_url || "", tracks: result?.tracks || [] })} /></Suspense>}
+    {mediaViewer && music.track && <ArtworkViewer track={music.track} onClose={() => setMediaViewer(false)} />}
+    {settingsOpen && <Suspense fallback={null}><Settings onClose={() => setSettingsOpen(false)} onClearHistory={music.clearHistory} autoplay={music.autoplay} onAutoplay={music.setAutoplay} repeat={music.repeat} onRepeat={music.setRepeat} discordEnabled={music.discordEnabled} onDiscordEnabled={music.toggleDiscord} privateListening={music.privateListening} track={music.track} position={music.position} duration={music.duration} onImportSpotify={(result) => library.importCollection({ liked: Boolean(result?.liked), sourceId: result?.source_id || "", title: result?.title || "", cover: result?.cover_url || "", tracks: result?.tracks || [] })} onImportYouTube={(result) => library.importCollection({ provider: "youtube", liked: Boolean(result?.liked), sourceId: result?.source_id || "", title: result?.title || "", cover: result?.cover_url || "", tracks: result?.tracks || [] })} /></Suspense>}
     {shortcutsOpen && <Shortcuts close={() => setShortcutsOpen(false)} />}
     {welcomeOpen && <Welcome close={() => setWelcomeOpen(false)} />}
     <PlayerAlert message={music.error || library.error} onDismiss={() => { music.setError(""); library.clearError(); }} />
-    <PlayerBar onFullscreen={openFullscreen} music={music} lyricsOpen={lyricsOpen} queueOpen={queueOpen} miniOpen={miniOpen} onLyrics={toggleLyrics} onQueue={() => setQueueOpen(!queueOpen)} onCloseQueue={() => setQueueOpen(false)} onMini={toggleMini} onArtist={(artist) => navigate({ view: "artist", artist })} onArtwork={() => setMediaViewer({ kind: "artwork" })} liked={isLiked} onLike={() => { if (music.track) library.toggleLike(music.track); }} />
+    <PlayerBar onFullscreen={openFullscreen} music={music} lyricsOpen={lyricsOpen} queueOpen={queueOpen} miniOpen={miniOpen} onLyrics={toggleLyrics} onQueue={() => setQueueOpen(!queueOpen)} onCloseQueue={() => setQueueOpen(false)} onMini={toggleMini} onArtist={(artist) => navigate({ view: "artist", artist })} onArtwork={() => setMediaViewer(true)} liked={isLiked} onLike={() => { if (music.track) library.toggleLike(music.track); }} />
   </PlayerSurface></></SongMenuProvider></PlaylistMenuProvider>;
 }
 

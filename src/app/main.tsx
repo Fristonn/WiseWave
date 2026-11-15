@@ -7,7 +7,13 @@ import staticLogo from "../../resources/images/icon.png";
 import { readZoom, setZoom, stepZoom, syncZoom } from "./shared/zoom";
 import { SnackbarProvider } from "./shared/ui/Snackbar";
 import { AccountImportNotifications } from "./modules/accounts/shared/ImportProgress";
-import "./styles.css";
+import "./ui/index.css";
+
+const syncVisualVisibility = () => {
+  document.documentElement.dataset.visualsHidden = String(document.hidden);
+};
+document.addEventListener("visibilitychange", syncVisualVisibility);
+syncVisualVisibility();
 
 try {
   const stored = localStorage.getItem("wisewave-settings");
@@ -35,7 +41,7 @@ document.addEventListener("keydown", (event) => {
 
 let wheelZoomDelta = 0;
 let wheelZoomTimer = 0;
-document.addEventListener("wheel", (event) => {
+const onZoomWheel = (event: WheelEvent) => {
   if (!event.ctrlKey || event.metaKey || event.altKey) return;
   event.preventDefault();
   window.clearTimeout(wheelZoomTimer);
@@ -46,7 +52,17 @@ document.addEventListener("wheel", (event) => {
     stepZoom(wheelZoomDelta < 0 ? 1 : -1);
     wheelZoomDelta = 0;
   }
-}, { passive: false, capture: true });
+};
+let zoomWheelEnabled = false;
+const setZoomWheelEnabled = (enabled: boolean) => {
+  if (zoomWheelEnabled === enabled) return;
+  zoomWheelEnabled = enabled;
+  if (enabled) document.addEventListener("wheel", onZoomWheel, { passive: false, capture: true });
+  else document.removeEventListener("wheel", onZoomWheel, true);
+};
+document.addEventListener("keydown", (event) => setZoomWheelEnabled(event.ctrlKey), true);
+document.addEventListener("keyup", (event) => setZoomWheelEnabled(event.ctrlKey), true);
+window.addEventListener("blur", () => setZoomWheelEnabled(false));
 window.addEventListener("storage", (event) => { if (event.key === "wisewave-zoom") syncZoom(event.newValue); });
 
 function App() {

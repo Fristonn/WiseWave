@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { Discord, TrayControl, type DiscordProfile, type SpotifyImportResult, type YouTubeImportResult, type Track } from "../../mygo";
-import { artworkURL } from "../../shared/ui/Artwork";
+import { preferredArtworkURL } from "../../shared/ui/Artwork";
 import { Classic } from "../../shared/ui/Classic";
 import { MarqueeText } from "../../shared/ui/MarqueeText";
 import { PlayerAlert } from "../player/shared/PlayerAlert";
-import { AudioLines, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, ExternalLink, Code2, Globe, Mic2, Palette, Shield, X } from "lucide-react";
+import { AudioLines, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, ExternalLink, LockKeyhole, Mic2, Palette, Search, X } from "lucide-react";
 import appIcon from "../../../../resources/images/icon.png";
-import echoControlsLicense from "../../../../resources/licenses/echo-controls-license.txt?raw";
 import lyricsLicense from "../../../../resources/licenses/accompanist-lyrics-license.txt?raw";
 import lyricsNotice from "../../../../resources/licenses/accompanist-lyrics-notice.txt?raw";
 import loadingLicense from "../../../../resources/licenses/loading-ui-license.txt?raw";
@@ -19,7 +18,6 @@ import goAACLicense from "../../../../resources/licenses/go-aac-license.txt?raw"
 import goAudioStreamLicense from "../../../../resources/licenses/go-audio-stream-license.txt?raw";
 import goM4ALicense from "../../../../resources/licenses/go-m4a-license.txt?raw";
 import simdLicense from "../../../../resources/licenses/simd-license.txt?raw";
-import { appVersion } from "../../version";
 import { LYRIC_SOURCES } from "../player/lyric-view/LyricCredit";
 import { ProgressStylePreview } from "../player/playback/ProgressStylePreview";
 import { PROGRESS_STYLES, readProgressStyle, type ProgressStyle } from "../player/playback/progressStyle";
@@ -27,7 +25,6 @@ import { readZoom, setZoom, ZOOM_LEVELS } from "../../shared/zoom";
 import { Equalizer } from "./Equalizer";
 import { YouTubeConnection, YouTubeIcon } from "../accounts/YouTube/YouTubeConnection";
 import { SpotifyConnection, SpotifyIcon } from "../accounts/Spotify/SpotifyConnection";
-import { linkLabel, links } from "../../shared/links";
 
 function formatTime(value: number) {
   const seconds = Math.max(0, Math.floor(value));
@@ -68,6 +65,7 @@ export interface SettingsProps {
   onClearHistory: () => boolean;
   discordEnabled: boolean;
   onDiscordEnabled: (value: boolean) => void;
+  privateListening?: boolean;
   autoplay: boolean;
   onAutoplay: (value: boolean) => void;
   repeat: boolean;
@@ -301,11 +299,10 @@ const LICENSES = [
   { name: "React", license: "MIT", text: reactLicense },
   { name: "React DOM", license: "MIT", text: reactDomLicense },
   { name: "Lucide React", license: "ISC", text: lucideLicense },
-  { name: "Echo Music playback icons", license: "GPL-3.0", text: echoControlsLicense },
   { name: "Lottie Web", license: "MIT", text: lottieLicense },
   { name: "MyGo Runtime", license: "MIT", text: mygoLicense },
   { name: "Accompanist Lyrics UI", license: "Apache 2.0", text: `${lyricsNotice}\n\n${lyricsLicense}` },
-  { name: "Loading UI", license: "MIT", text: loadingLicense },
+  { name: "loading ui", license: "MIT", text: loadingLicense },
   { name: "go-aac", license: "LGPL-2.1-or-later", text: goAACLicense },
   { name: "go-audio-stream", license: "MIT", text: goAudioStreamLicense },
   { name: "go-m4a", license: "MIT", text: goM4ALicense },
@@ -327,13 +324,14 @@ function DiscordIcon({ size = 18 }: { size?: number }) {
 }
 
 
-const NAV_ICONS = { appearance: Palette, playback: AudioLines, lyrics: Mic2, library: BookOpen, spotify: SpotifyIcon, youtube: YouTubeIcon, discord: DiscordIcon, privacy: Shield, about: CircleHelp };
+const NAV_ICONS = { appearance: Palette, playback: AudioLines, lyrics: Mic2, library: BookOpen, spotify: SpotifyIcon, youtube: YouTubeIcon, discord: DiscordIcon, privacy: LockKeyhole, about: CircleHelp };
 
 export function Settings({
   onClose,
   onClearHistory,
   discordEnabled,
   onDiscordEnabled,
+  privateListening = false,
   autoplay,
   onAutoplay,
   repeat,
@@ -458,22 +456,22 @@ export function Settings({
   const updateSetting = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
     if (key === "hist" && value === false) {
       if (!onClearHistory()) {
-        setNote("Could not clear listening history.");
+        setNote("couldn't clear your listening history");
         return;
       }
       saveSetting(key, value);
-      setNote("Listening history cleared.");
+      setNote("listening history cleared");
       return;
     }
     if (key === "startup") {
-      void TrayControl.setStartupMode(String(value)).then(() => saveSetting(key, value)).catch((error: unknown) => setNote(error instanceof Error ? error.message : "Could not update launch at startup."));
+      void TrayControl.setStartupMode(String(value)).then(() => saveSetting(key, value)).catch((error: unknown) => setNote(error instanceof Error ? error.message : "couldn't save your startup setting"));
       return;
     }
     saveSetting(key, value);
   };
 
   useEffect(() => {
-    void TrayControl.startupMode().then((mode) => setSt((previous) => ({ ...previous, startup: mode }))).catch(() => setNote("Could not check launch at startup."));
+    void TrayControl.startupMode().then((mode) => setSt((previous) => ({ ...previous, startup: mode }))).catch(() => setNote("couldn't check your startup setting"));
   }, []);
 
   useEffect(() => {
@@ -486,10 +484,10 @@ export function Settings({
     if (actKey === "hist") {
       if (!confirmHistory) { setConfirmHistory(true); return; }
       setConfirmHistory(false);
-      setNote(onClearHistory() ? "Listening history cleared." : "Could not clear listening history.");
+      setNote(onClearHistory() ? "listening history cleared" : "couldn't clear your listening history");
       return;
     }
-    setNote("This action is unavailable.");
+    setNote("that isn't available yet");
   };
 
   const closeSettings = () => {
@@ -762,9 +760,9 @@ export function Settings({
       }
     });
 
-    const matchesAbout = "about wisewave developer github friston discord community website open source licenses".includes(q);
+    const matchesAbout = "about wisewave open source licenses".includes(q);
     if (!matches.length && !matchesAbout) {
-      return <div className="settings-search-empty" role="status">No results found for &quot;{query.trim()}&quot;.</div>;
+      return <div className="settings-search-empty" role="status">no results found for &quot;{query.trim()}&quot;.</div>;
     }
 
     return (
@@ -783,11 +781,13 @@ export function Settings({
   };
 
   const currentSection = SETTINGS_SECTIONS[activeSection] || SETTINGS_SECTIONS.appearance;
+  const HeaderIcon = query.trim() ? Search : NAV_ICONS[activeSection as keyof typeof NAV_ICONS] || Palette;
+  const showHeaderContent = Boolean(query.trim()) || !["youtube", "spotify", "discord"].includes(activeSection);
 
   const discordPreviewData = useMemo(() => {
-    const cover = track?.album_art_url ? artworkURL(track.album_art_url, 152) : "";
+    const cover = track?.album_art_url ? preferredArtworkURL(track.album_art_url, 152) : "";
     return {
-      titleText: track?.title || "Nothing playing",
+      titleText: track?.title || "nothing playing",
       artistText: track?.artist || null,
       artworkSrc: cover || (track ? "wisewave_logo" : ""),
       currentTimeText: track ? formatTime(currentPosition) : "--:--",
@@ -852,7 +852,7 @@ export function Settings({
 
       <div className="settings-body">
         <header className="settings-header">
-          <strong>{query.trim() ? "Search" : showLicenses && activeSection === "about" ? showLyricsSources ? "Lyrics sources" : "Open source licenses" : currentSection.t}</strong>
+          {showHeaderContent && <div className="settings-header-content"><span className="settings-header-icon" aria-hidden="true"><HeaderIcon size={18} /></span><strong>{query.trim() ? "Search" : showLicenses && activeSection === "about" ? showLyricsSources ? "Lyrics sources" : "Open source licenses" : currentSection.t}</strong></div>}
           <button className="settings-close" type="button" onClick={closeSettings} aria-label="Close settings"><X size={20} /></button>
         </header>
       <main className="settings-main player-scroll" ref={mainRef}>
@@ -880,14 +880,6 @@ export function Settings({
                 </details>)}</div>
               </>}
             </div> : <div className="settings-about">
-              <div className="settings-about-brand"><img src={appIcon} alt="" /><div><h1>WiseWave</h1><span>Version {appVersion}</span></div></div>
-              <h2>Developer</h2>
-              <a href={links.github} target="_blank" rel="noreferrer"><Code2 size={21} /><span><strong>GitHub</strong><small>{linkLabel(links.github)}</small></span><ExternalLink size={17} /></a>
-              <a href={links.discord} target="_blank" rel="noreferrer"><DiscordIcon size={21} /><span><strong>Friston</strong><small>idk what to write here lol</small></span><ExternalLink size={17} /></a>
-              <h2>Community</h2>
-              <a href={links.community} target="_blank" rel="noreferrer"><DiscordIcon size={21} /><span><strong>Discord</strong><small>{linkLabel(links.community)}</small></span><ExternalLink size={17} /></a>
-              <h2>App</h2>
-              <a href={links.site} target="_blank" rel="noreferrer"><Globe size={21} /><span><strong>Website</strong><small>{linkLabel(links.site)}</small></span><ExternalLink size={17} /></a>
               <button type="button" onClick={() => { setShowLicenses(true); if (mainRef.current) mainRef.current.scrollTop = 0; }}><BookOpen size={21} /><span><strong>Open source licenses</strong><small>Licenses and notices for included components</small></span><ChevronRight size={19} /></button>
             </div>)}
 
@@ -898,7 +890,7 @@ export function Settings({
             {currentSection.pre === "discord" && (
               <div className="settings-pv settings-dcp">
                 <div className={`discord-account-heading${discordProfile ? " is-connected" : " is-disconnected"}`}><DiscordIcon size={16} /><span>{discordProfile ? "Connected" : "Disconnected"}</span></div>
-                {discordProfile ? <div className="discord-profile-card">
+                {privateListening ? <div className="discord-account-empty">turn off privacy mode to show your status</div> : discordProfile ? <div className="discord-profile-card">
                   <div className="discord-profile-identity">
                     {discordProfile.avatar ? <img className="discord-account-avatar" src={`https://cdn.discordapp.com/avatars/${encodeURIComponent(discordProfile.id)}/${encodeURIComponent(discordProfile.avatar)}.png?size=128`} alt="" referrerPolicy="no-referrer" /> : <span className="discord-account-avatar discord-account-avatar-fallback"><DiscordIcon size={28} /></span>}
                     <div className="discord-account-copy"><MarqueeText className="discord-profile-display-name">{discordProfile.global_name || discordProfile.username}</MarqueeText><MarqueeText className="discord-profile-username">@{discordProfile.username}</MarqueeText></div>
