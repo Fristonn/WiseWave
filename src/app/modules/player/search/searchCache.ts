@@ -162,7 +162,7 @@ export async function loadSearchPage(query: string): Promise<SearchPageCache> {
     albums: results[1].status === "fulfilled" ? results[1].value : [],
     artists: results[2].status === "fulfilled" ? results[2].value : [],
     playlists: results[3].status === "fulfilled" ? results[3].value : [],
-    error: failures === 0 ? "" : failures === 4 ? "Search is unavailable. Try again." : "Some results could not be loaded. Try again.",
+    error: failures === 0 ? "" : failures === 4 ? "couldn't search right now. try again" : "some results didn't load. try again",
   };
 }
 

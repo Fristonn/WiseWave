@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { History, Play, Search, X } from "lucide-react";
 import { Music, type CatalogAlbum, type CatalogArtist, type CatalogPlaylist, type Track } from "../../../mygo";
-import { Classic } from "../../../shared/ui/Classic";
 import { Artwork } from "../../../shared/ui/Artwork";
 import { useSongMenu } from "../shared/SongMenu";
 import { ArtistLinks } from "../shared/ArtistLinks";
 import { PlayerAlert } from "../shared/PlayerAlert";
 import { loadSearchSuggest, peekSearchSuggest } from "./searchCache";
+import { SearchSkeleton } from "./SearchSkeleton";
 
 const storageKey = "wisewave-search-history";
 function supportedMusicLink(value: string) {
@@ -316,7 +316,6 @@ export function SearchBox({
             <kbd>K</kbd>
           </span>
         )}
-        {searching && draft.trim() && <Classic className="search-loading" aria-label="Searching" />}
         {draft && (
           <button
             className="search-clear"
@@ -400,9 +399,7 @@ export function SearchBox({
             ) : (
               <div className="search-dropdown-section">
                 {searching && !suggestionItems.length && !artistItems.length && !preview.length && !playlists.length && !albums.length && (
-                  <div className="search-skeleton" role="status" aria-label="Searching">
-                    {[68, 55, 72, 48, 62].map((width) => <div key={width}><span /><span><i style={{ width: `${width}%` }} /><i style={{ width: `${Math.round(width * 0.6)}%` }} /></span></div>)}
-                  </div>
+                  <SearchSkeleton />
                 )}
                 {suggestionItems.length > 0 && <div className="search-dropdown-header">Suggestions</div>}
                 {suggestionItems.map((item, index) => (
@@ -479,9 +476,9 @@ export function SearchBox({
                     </button>
                   </div>;
                 })}
-                <PlayerAlert message={tracksFailed && suggestionItems.length > 0 ? "Tracks couldn’t be loaded." : !searching && failed && !suggestionItems.length && !artistItems.length && !preview.length && !playlists.length && !albums.length ? "Search is unavailable. Try again." : ""} onDismiss={() => {}} />
+                <PlayerAlert message={tracksFailed && suggestionItems.length > 0 ? "couldn't load the songs" : !searching && failed && !suggestionItems.length && !artistItems.length && !preview.length && !playlists.length && !albums.length ? "couldn't search right now. try again" : ""} onDismiss={() => {}} />
                 {!searching && !suggestionItems.length && !artistItems.length && !preview.length && !playlists.length && !albums.length && (
-                  !failed && <p className="search-dropdown-message">No results found</p>
+                  !failed && <p className="search-dropdown-message">no results found</p>
                 )}
               </div>
             )}

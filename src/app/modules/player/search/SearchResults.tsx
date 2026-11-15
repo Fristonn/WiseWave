@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { Check, Heart, ListMusic, ListPlus, Play } from "lucide-react";
+import { Check, ListMusic, Play } from "lucide-react";
 import type { CatalogAlbum, CatalogArtist, CatalogPlaylist, Track } from "../../../mygo";
 import { Artwork } from "../../../shared/ui/Artwork";
 import { PlayingSpectrum } from "../../../shared/ui/PlayingSpectrum";
-import { Classic } from "../../../shared/ui/Classic";
+import { SearchSkeleton } from "./SearchSkeleton";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import { ArtistLinks } from "../shared/ArtistLinks";
 import { trackDurationLabel } from "../shared/trackDuration";
@@ -23,12 +23,9 @@ interface SearchResultsProps {
   albums: CatalogAlbum[];
   artists: CatalogArtist[];
   playlists: CatalogPlaylist[];
-  liked: Track[];
   current: Track | null;
   playing?: boolean;
   onPlay: (track: Track, tracks: Track[]) => void;
-  onLike: (track: Track) => void;
-  onQueue: (track: Track) => void;
   onArtist: (artist: { artist: string; artist_id?: string }) => void;
   onAlbum: (albumId: string) => void;
   onPlaylist: (playlistId: string) => void;
@@ -44,12 +41,9 @@ export function SearchResults({
   albums,
   artists,
   playlists,
-  liked,
   current,
   playing = false,
   onPlay,
-  onLike,
-  onQueue,
   onArtist,
   onAlbum,
   onPlaylist,
@@ -134,9 +128,10 @@ export function SearchResults({
               key={label}
               type="button"
               className={`search-chip ${isSelected ? "active" : ""}`}
+              aria-pressed={isSelected}
               onClick={() => onCategory(label)}
             >
-              {isSelected && <Check size={14} className="search-chip-check" />}
+              <Check size={14} className="search-chip-check" aria-hidden="true" />
               <span>{label}</span>
             </button>
           );
@@ -145,14 +140,11 @@ export function SearchResults({
 
       <PlayerAlert message={error || ""} onDismiss={() => {}} />
 
-      {loading && !tracks.length && !albums.length && !artists.length ? (
-        <div className="search-results-loading" role="status">
-          <Classic />
-          <span>Searching…</span>
-        </div>
+      {loading && !tracks.length && !albums.length && !artists.length && !playlists.length ? (
+        <SearchSkeleton />
       ) : error && isEmpty ? null : isEmpty ? (
         <div className="search-results-empty">
-          <h3>No matches</h3>
+          <h3>no matches</h3>
           <p>Try a different track, artist, album or playlist.</p>
         </div>
       ) : (
@@ -160,23 +152,16 @@ export function SearchResults({
           {bestMatch && category === "All" && (
             <div className="search-section">
               <h3 className="search-section-title">Best match</h3>
-              <div className="search-best-match">
-                <div
-                  className="search-best-match-cover"
-                  onClick={() => onPlay(bestMatch, tracks)}
-                >
+              <div className="search-best-match" role="button" tabIndex={0} aria-label={`Play ${bestMatch.title} by ${bestMatch.artist}`} onClick={() => onPlay(bestMatch, tracks)} onContextMenu={(event) => openSongMenu(event, bestMatch)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onPlay(bestMatch, tracks); } }}>
+                <div className="search-best-match-cover">
                   <Artwork src={bestMatch.album_art_url} size={80} />
-                  <PlayingSpectrum active={current?.id === bestMatch.id} playing={playing} size={32} placement="corner" />
+                  <PlayingSpectrum active={current?.id === bestMatch.id} playing={playing} size={32} />
                   <span className="search-best-match-play">
                     <Play size={24} fill="currentColor" />
                   </span>
                 </div>
                 <div className="search-best-match-info">
-                  <span
-                    className="search-best-match-title song-menu-title"
-                    onContextMenu={(event) => openSongMenu(event, bestMatch)}
-                    onClick={() => onPlay(bestMatch, tracks)}
-                  >
+                  <span className="search-best-match-title">
                     <MarqueeText>{bestMatch.title}</MarqueeText>
                   </span>
                   <span className="search-best-match-artist">
@@ -190,36 +175,6 @@ export function SearchResults({
                       }
                     />
                   </span>
-                  <span className="search-best-match-badge">Song</span>
-                </div>
-                <div className="search-best-match-actions">
-                  <button
-                    type="button"
-                    className="search-row-action"
-                    aria-label={`${
-                      liked.some((item) => item.id === bestMatch.id)
-                        ? "Unlike"
-                        : "Like"
-                    } ${bestMatch.title}`}
-                    onClick={() => onLike(bestMatch)}
-                  >
-                    <Heart
-                      size={18}
-                      fill={
-                        liked.some((item) => item.id === bestMatch.id)
-                          ? "currentColor"
-                          : "none"
-                      }
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    className="search-row-action"
-                    aria-label={`Add ${bestMatch.title} to queue`}
-                    onClick={() => onQueue(bestMatch)}
-                  >
-                    <ListPlus size={20} />
-                  </button>
                 </div>
               </div>
             </div>
