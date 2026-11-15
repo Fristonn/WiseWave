@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"wisewave-runtime/internal/external/jiosaavn"
 	"wisewave-runtime/internal/innertube"
 	"wisewave-runtime/internal/lyrics"
+	"wisewave-runtime/internal/models"
 	"wisewave-runtime/internal/storage"
 )
 
@@ -34,31 +36,36 @@ type DownloadResult struct {
 }
 
 type OfflineTrack struct {
-	ID             string `json:"id"`
-	Title          string `json:"title"`
-	Artist         string `json:"artist"`
-	Album          string `json:"album"`
-	AudioFileName  string `json:"audio_file_name"`
-	AudioFilePath  string `json:"audio_file_path"`
-	LyricsFilePath string `json:"lyrics_file_path,omitempty"`
-	TtmlFilePath   string `json:"ttml_file_path,omitempty"`
-	FileSizeBytes  int64  `json:"file_size_bytes"`
-	HasLyrics      bool   `json:"has_lyrics"`
-	HasTtml        bool   `json:"has_ttml"`
-	ModifiedAt     int64  `json:"modified_at"`
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	Artist          string `json:"artist"`
+	Album           string `json:"album"`
+	AudioFileName   string `json:"audio_file_name"`
+	AudioFilePath   string `json:"audio_file_path"`
+	LyricsFilePath  string `json:"lyrics_file_path,omitempty"`
+	TtmlFilePath    string `json:"ttml_file_path,omitempty"`
+	FileSizeBytes   int64  `json:"file_size_bytes"`
+	HasLyrics       bool   `json:"has_lyrics"`
+	HasTtml         bool   `json:"has_ttml"`
+	ModifiedAt      int64  `json:"modified_at"`
+	Duration        string `json:"duration"`
+	DurationSeconds int    `json:"duration_seconds"`
+	AlbumArtURL     string `json:"album_art_url"`
 }
 
 type Service struct {
-	catalog       *storage.Catalog
-	mediaDir      string
-	offlineDir    string
-	tube          *innertube.Client
-	saavn         *jiosaavn.Client
-	gaana         *gaana.Client
-	lyricsService *lyrics.Service
-	streamCache   *cache.StreamCache
-	httpClient    *http.Client
-	trackLocks    sync.Map
+	catalog        *storage.Catalog
+	mediaDir       string
+	offlineDir     string
+	tube           *innertube.Client
+	saavn          *jiosaavn.Client
+	gaana          *gaana.Client
+	lyricsService  *lyrics.Service
+	streamCache    *cache.StreamCache
+	httpClient     *http.Client
+	trackLocks     sync.Map
+	streamResolver func(string, string, string) (string, error)
+	streamOpener   func(string) (*http.Response, error)
 }
 
 func NewService(
@@ -98,6 +105,9 @@ func (s *Service) lockTrack(trackID string) func() {
 }
 
 func (s *Service) resolveStreamURL(trackID, title, artist string) (string, error) {
+	if s.streamResolver != nil {
+		return s.streamResolver(trackID, title, artist)
+	}
 	if cached, hit := s.streamCache.Get(trackID); hit && cached.URL != "" {
 		return cached.URL, nil
 	}
@@ -238,7 +248,12 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36")
 
-	resp, err := s.httpClient.Do(req)
+	var resp *http.Response
+	if s.streamOpener != nil {
+		resp, err = s.streamOpener(streamURL)
+	} else {
+		resp, err = s.httpClient.Do(req)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("audio stream request failed: %w", err)
 	}
@@ -249,7 +264,8 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 	}
 
 	peekBuf := make([]byte, 512)
-	n, _ := io.ReadFull(resp.Body, peekBuf)
+	source := innertube.WrapIfSABR(resp)
+	n, _ := io.ReadFull(source, peekBuf)
 	leadingBytes := peekBuf[:n]
 	ext := detectAudioExtension(resp.Header.Get("Content-Type"), leadingBytes)
 
@@ -273,13 +289,17 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 		copiedBytes += int64(written)
 	}
 
-	restCopied, err := io.Copy(outFile, resp.Body)
+	restCopied, err := io.Copy(outFile, source)
 	outFile.Close()
 	if err != nil {
 		_ = os.Remove(tempAudioFilePath)
 		return nil, fmt.Errorf("audio download interrupted: %w", err)
 	}
 	copiedBytes += restCopied
+	if resp.ContentLength > 0 && copiedBytes != resp.ContentLength && source == resp.Body {
+		_ = os.Remove(tempAudioFilePath)
+		return nil, fmt.Errorf("audio download is incomplete")
+	}
 
 	if copiedBytes < 1024 {
 		_ = os.Remove(tempAudioFilePath)
@@ -350,7 +370,9 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 		}
 	}
 
-	s.catalog.Rescan()
+	if s.catalog != nil {
+		s.catalog.Rescan()
+	}
 
 	return result, nil
 }
@@ -428,7 +450,7 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 			ttmlPath = ""
 		}
 
-		tracks = append(tracks, OfflineTrack{
+		track := OfflineTrack{
 			ID:             trackID,
 			Title:          title,
 			Artist:         artist,
@@ -441,10 +463,60 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 			HasLyrics:      hasLyrics,
 			HasTtml:        hasTtml,
 			ModifiedAt:     info.ModTime().UnixMilli(),
-		})
+		}
+		if data, err := os.ReadFile(fullAudioPath + ".json"); err == nil {
+			var metadata models.Track
+			if json.Unmarshal(data, &metadata) == nil && metadata.ID != "" {
+				track.ID = metadata.ID
+				track.Title = metadata.Title
+				track.Artist = metadata.Artist
+				track.Album = metadata.Album
+				track.Duration = metadata.Duration
+				track.DurationSeconds = metadata.DurationSeconds
+				track.AlbumArtURL = metadata.AlbumArtURL
+			}
+		}
+		tracks = append(tracks, track)
 	}
 
 	return tracks, nil
+}
+
+func (s *Service) SetStreamResolver(resolve func(string, string, string) (string, error)) {
+	s.streamResolver = resolve
+}
+
+func (s *Service) SetStreamOpener(open func(string) (*http.Response, error)) {
+	s.streamOpener = open
+}
+
+func (s *Service) DownloadWithMetadata(track models.Track) (*DownloadResult, error) {
+	track.StreamURL = ""
+	result, err := s.DownloadTrack(track.ID, track.Title, track.Artist, track.Album, track.DurationSeconds)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(track)
+	if err != nil {
+		return nil, err
+	}
+	metadataPath := result.AudioFilePath + ".json"
+	temporary, err := os.CreateTemp(s.offlineDir, ".tmp_metadata_*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(temporary.Name())
+	if _, err := temporary.Write(data); err != nil {
+		temporary.Close()
+		return nil, err
+	}
+	if err := temporary.Close(); err != nil {
+		return nil, err
+	}
+	if err := os.Rename(temporary.Name(), metadataPath); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) GetOfflineAudioFile(trackID string) (string, string, error) {
