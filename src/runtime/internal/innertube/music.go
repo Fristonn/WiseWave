@@ -59,6 +59,7 @@ type MusicClient struct {
 	language                string
 	country                 string
 	cookieAuth              atomic.Pointer[CookieAuth]
+	playbackAuth            atomic.Pointer[CookieAuth]
 	allowInsecureCookieAuth bool
 }
 
@@ -190,7 +191,27 @@ func (client *MusicClient) execute(ctx context.Context, endpoint string, payload
 	return client.executeAs(ctx, musicClient, true, endpoint, payload)
 }
 
+func (client *MusicClient) executeAnonymous(ctx context.Context, endpoint string, payload map[string]any) (json.RawMessage, error) {
+	return client.executeAsWithAuth(ctx, musicClient, true, endpoint, payload, nil)
+}
+
+func (client *MusicClient) executePlayback(ctx context.Context, endpoint string, payload map[string]any) (json.RawMessage, error) {
+	return client.executePlaybackAs(ctx, musicClient, true, endpoint, payload)
+}
+
+func (client *MusicClient) executePlaybackAs(ctx context.Context, innerTube innerTubeClient, audioOnly bool, endpoint string, payload map[string]any) (json.RawMessage, error) {
+	return client.executeAsWithAuth(ctx, innerTube, audioOnly, endpoint, payload, client.playbackAuth.Load())
+}
+
 func (c *MusicClient) executeAs(ctx context.Context, client innerTubeClient, audioOnly bool, endpoint string, payload map[string]any) (json.RawMessage, error) {
+	auth := c.cookieAuth.Load()
+	if client != musicClient && client != webClient {
+		auth = nil
+	}
+	return c.executeAsWithAuth(ctx, client, audioOnly, endpoint, payload, auth)
+}
+
+func (c *MusicClient) executeAsWithAuth(ctx context.Context, client innerTubeClient, audioOnly bool, endpoint string, payload map[string]any, auth *CookieAuth) (json.RawMessage, error) {
 	var clientName, clientID, clientVersion string
 	switch client {
 	case musicClient:
@@ -201,10 +222,6 @@ func (c *MusicClient) executeAs(ctx context.Context, client innerTubeClient, aud
 		clientName, clientID, clientVersion = "ANDROID_MUSIC", "21", androidMusicVersion
 	case visionOSClient:
 		clientName, clientID, clientVersion = "VISIONOS", "101", visionOSVersion
-	}
-	auth := c.cookieAuth.Load()
-	if client != musicClient && client != webClient {
-		auth = nil
 	}
 	requestContext := c.context(auth)
 	requestContext.Client.ClientName = clientName
@@ -290,7 +307,7 @@ func (c *MusicClient) executeAs(ctx context.Context, client innerTubeClient, aud
 }
 
 func (client *MusicClient) setIdentity(req *http.Request, visitorData string) {
-	client.setIdentityWithAuth(req, visitorData, client.cookieAuth.Load())
+	client.setIdentityWithAuth(req, visitorData, client.playbackAuth.Load())
 }
 
 func (client *MusicClient) setIdentityWithAuth(req *http.Request, visitorData string, auth *CookieAuth) {
@@ -345,4 +362,4 @@ func responseError(operation string, resp *http.Response) error {
 	return fmt.Errorf("youtube: %s returned HTTP %d: %s", operation, resp.StatusCode, diagnostic)
 }
 
-func (client *MusicClient) SetCookieAuth(auth *CookieAuth) { client.cookieAuth.Store(auth) }
+func (client *MusicClient) SetPlaybackAuth(auth *CookieAuth) { client.playbackAuth.Store(auth) }

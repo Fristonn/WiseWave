@@ -30,7 +30,7 @@ func (client *MusicClient) GetUpNext(ctx context.Context, options UpNextOptions)
 	if options.Continuation != "" {
 		payload["continuation"] = options.Continuation
 	}
-	raw, err := client.execute(ctx, "next", payload)
+	raw, err := client.executePlayback(ctx, "next", payload)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (client *MusicClient) GetUpNext(ctx context.Context, options UpNextOptions)
 		return result, nil
 	}
 	playlistPayload["videoId"] = options.VideoID
-	raw, err = client.execute(ctx, "next", playlistPayload)
+	raw, err = client.executePlayback(ctx, "next", playlistPayload)
 	if err != nil {
 		return nil, err
 	}

@@ -244,7 +244,7 @@ func (a *YouTubeAccount) activateLocked(session *YouTubeLoginSession) {
 	a.auth = session.auth
 	a.status = YouTubeAccountStatus{Linked: true, DisplayName: session.details.Name, Username: strings.TrimLeft(strings.TrimSpace(session.details.Handle), "@"), Email: session.details.Email, ImageURL: session.details.Thumbnail}
 	if a.client != nil {
-		a.client.SetCookieAuth(session.auth)
+		a.client.SetPlaybackAuth(session.auth)
 	}
 }
 
@@ -270,7 +270,7 @@ func (a *YouTubeAccount) Disconnect() error {
 	a.auth = nil
 	a.status = YouTubeAccountStatus{}
 	if a.client != nil {
-		a.client.SetCookieAuth(nil)
+		a.client.SetPlaybackAuth(nil)
 	}
 	a.mu.Unlock()
 	_ = YouTubeAccountChanged.Broadcast(false)

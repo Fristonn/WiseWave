@@ -48,7 +48,7 @@ func (client *MusicClient) Loudness(ctx context.Context, videoID string) (Loudne
 	if strings.TrimSpace(videoID) == "" {
 		return Loudness{}, errors.New("youtube: loudness requires a video ID")
 	}
-	raw, err := client.executeAs(ctx, webClient, false, "player", map[string]any{
+	raw, err := client.executePlaybackAs(ctx, webClient, false, "player", map[string]any{
 		"videoId":         videoID,
 		"playbackContext": map[string]any{"contentPlaybackContext": map[string]any{}},
 	})
@@ -109,10 +109,10 @@ func (client *MusicClient) BeginEpisodePlayback(ctx context.Context, videoID str
 }
 
 func (c *MusicClient) reportPlayback(ctx context.Context, videoID string, position, duration time.Duration, withWatchtime bool) (*PlaybackSession, error) {
-	if c.cookieAuth.Load() == nil || strings.TrimSpace(videoID) == "" {
+	if c.playbackAuth.Load() == nil || strings.TrimSpace(videoID) == "" {
 		return nil, nil
 	}
-	raw, err := c.execute(ctx, "player", map[string]any{
+	raw, err := c.executePlayback(ctx, "player", map[string]any{
 		"videoId":         videoID,
 		"playbackContext": map[string]any{"contentPlaybackContext": map[string]any{}},
 	})

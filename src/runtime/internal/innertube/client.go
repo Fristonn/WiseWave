@@ -119,7 +119,7 @@ func (client *Client) LocalSearchSuggestions(query string) []string {
 }
 
 func (client *Client) retrieveSearch(ctx context.Context, query string) ([]models.Track, error) {
-	raw, err := client.MusicClient.execute(ctx, "search", map[string]any{"query": query, "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA=="})
+	raw, err := client.MusicClient.executeAnonymous(ctx, "search", map[string]any{"query": query, "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA=="})
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (client *Client) retrieveSearch(ctx context.Context, query string) ([]model
 	}
 	token := continuationToken(decodeResponse(raw))
 	if len(tracks) < 60 && token != "" {
-		next, nextErr := client.MusicClient.execute(ctx, "search", map[string]any{"continuation": token})
+		next, nextErr := client.MusicClient.executeAnonymous(ctx, "search", map[string]any{"continuation": token})
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

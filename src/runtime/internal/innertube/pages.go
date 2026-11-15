@@ -467,8 +467,9 @@ func (client *MusicClient) GetNewReleases(ctx context.Context) (*BrowseResult, e
 }
 
 func (client *MusicClient) GetHistory(ctx context.Context) (*BrowseResult, error) {
-	if client.cookieAuth.Load() == nil {
-		return nil, errors.New("youtube: history requires signed-in session")
+	raw, err := client.executeAnonymous(ctx, "browse", map[string]any{"browseId": "FEmusic_history"})
+	if err != nil {
+		return nil, err
 	}
-	return client.browse(ctx, "FEmusic_history")
+	return client.newBrowseResult(raw), nil
 }

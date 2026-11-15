@@ -41,7 +41,7 @@ func (client *MusicClient) Search(ctx context.Context, query string, options Sea
 
 		payload["params"] = options.Params
 	}
-	raw, err := client.execute(ctx, "search", payload)
+	raw, err := client.executeAnonymous(ctx, "search", payload)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (client *MusicClient) ContinueSearch(ctx context.Context, token string, ori
 	if len(query) > 512 || len(token) > 8192 {
 		return nil, errors.New("youtube: invalid search continuation")
 	}
-	raw, err := client.execute(ctx, "search", map[string]any{"continuation": token})
+	raw, err := client.executeAnonymous(ctx, "search", map[string]any{"continuation": token})
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (client *MusicClient) GetSearchSuggestions(ctx context.Context, input strin
 	if strings.TrimSpace(input) == "" {
 		return nil, errors.New("youtube: suggestion input is required")
 	}
-	raw, err := client.execute(ctx, "music/get_search_suggestions", map[string]any{"input": input})
+	raw, err := client.executeAnonymous(ctx, "music/get_search_suggestions", map[string]any{"input": input})
 	if err != nil {
 		return nil, err
 	}
