@@ -116,19 +116,37 @@ export function ProgressStylePreview({
     let frame = 0;
     let phase = 0;
     let last = performance.now();
+    let visible = false;
 
     const draw = (now: number) => {
+      frame = 0;
+      if (!visible || document.hidden) return;
       const dt = Math.min(48, now - last);
       last = now;
       if (playing && !reduce) {
         if (wavy) phase = (phase + dt * Math.PI * 2 / 1800) % (Math.PI * 2);
       }
       paint(canvas, style, progressRef.current, buffered, phase);
+      if (playing && wavy && !reduce) frame = requestAnimationFrame(draw);
+    };
+    const wake = () => {
+      if (!visible || document.hidden || frame) return;
+      last = performance.now();
       frame = requestAnimationFrame(draw);
     };
-    frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
-  }, [style, buffered, playing]);
+    const observer = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible) wake();
+      else { cancelAnimationFrame(frame); frame = 0; }
+    });
+    observer.observe(canvas);
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", wake);
+      cancelAnimationFrame(frame);
+    };
+  }, [style, buffered, playing, progress]);
 
   return <canvas ref={ref} className={`progress-style-preview ${className}`} aria-hidden="true" />;
 }

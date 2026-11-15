@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { events } from "../../../mygo";
 import { RepeatIcon, ShuffleIcon } from "../../../shared/ui/icons";
 import { Heart, Volume1, Volume2, VolumeX, Minimize } from "lucide-react";
-import { Artwork, artworkURL } from "../../../shared/ui/Artwork";
+import { Artwork, artworkURL, loadedArtworkSource } from "../../../shared/ui/Artwork";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import { Lyrics } from "../lyric-view/Lyrics";
 import { PlayerSlider } from "./PlayerSlider";
@@ -47,9 +47,9 @@ function ApplePauseIcon() {
 }
 
 const FullscreenBackdrop = memo(function FullscreenBackdrop({ src }: { src: string }) {
-  const primary = artworkURL(src, 160) || src;
+  const primary = loadedArtworkSource(src) || artworkURL(src, 160) || src;
   const [url, setUrl] = useState(primary);
-  useEffect(() => { setUrl(artworkURL(src, 160) || src); }, [src]);
+  useEffect(() => { setUrl(loadedArtworkSource(src) || artworkURL(src, 160) || src); }, [src]);
   if (!url) return null;
   return (
     <img

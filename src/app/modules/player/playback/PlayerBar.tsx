@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PlayerSlider } from "./PlayerSlider";
+import { SearchSkeleton } from "../search/SearchSkeleton";
 import { Heart, Maximize, ListMusic, Mic2, PictureInPicture2, Play, Volume1, Volume2, VolumeX } from "lucide-react";
 import { ListCollapseIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, RepeatIcon, ShuffleIcon } from "../../../shared/ui/icons";
 import { IconButton } from "../../../shared/ui/IconButton";
@@ -225,8 +226,8 @@ export function PlayerBar({
                   </strong>
                   <span className="mix-preserve">Keep mix <button type="button" className="settings-tog" role="switch" aria-label="Keep For You mix" aria-checked={music.preserveForYou} onClick={music.togglePreserveForYou} /></span>
                 </div>
-                <div className="mix-popover-list player-scroll">
-                  {validMixTracks.length > 0 ? (
+                <div className="mix-popover-list player-scroll" aria-busy={music.mixLoading}>
+                  {music.mixLoading ? <div className="mix-loading"><SearchSkeleton label="loading recommendations" /></div> : validMixTracks.length > 0 ? (
                     validMixTracks.map((item, index) => (
                       <div
                         key={`${item.id}-${index}`}
@@ -247,7 +248,7 @@ export function PlayerBar({
                         }}
                       >
                         <span className="mix-popover-art-wrap">
-                          <Artwork className="mix-popover-art" src={item.album_art_url} size={96} lazy rootMargin="250px 0px" />
+                          <Artwork className="mix-popover-art" src={item.album_art_url} size={96} lazy rootMargin="600px 0px" />
                           <span aria-hidden="true" className="mix-popover-play-overlay">
                             <Play size={16} fill="#ffffff" />
                           </span>
@@ -265,7 +266,7 @@ export function PlayerBar({
                       </div>
                     ))
                   ) : (
-                    <p className="mix-popover-empty">No recommended songs available.</p>
+                    <p className="mix-popover-empty">no recommendations yet</p>
                   )}
                 </div>
               </div>
@@ -345,7 +346,7 @@ export function PlayerBar({
             {controllable ? time(position) : "-:--"}
           </span>
           {timelineLoading ? (
-            <span className="player-loading-timeline" role="status" aria-label={music.trackLoading ? "Loading selected song" : "Buffering song"} />
+            <span className="player-loading-timeline" role="status" aria-label={music.trackLoading ? "loading selected song" : "Buffering song"} />
           ) : (
             <PlayerSlider
               animateValue
@@ -456,7 +457,7 @@ export function PlayerBar({
                     </div>
                   ))
                 ) : (
-                  <p className="queue-popover-empty">Your queue is empty.</p>
+                  <p className="queue-popover-empty">your queue is empty</p>
                 )}
               </div>
             </div>

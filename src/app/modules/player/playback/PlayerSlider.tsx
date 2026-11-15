@@ -75,6 +75,7 @@ export function PlayerSlider({
       || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame = 0;
     let phase = 0;
+    let visible = false;
     let last = performance.now();
     let shown = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
     let from = shown;
@@ -82,7 +83,7 @@ export function PlayerSlider({
     let changedAt = last;
     const draw = (now: number) => {
       frame = 0;
-      if (document.hidden) return;
+      if (document.hidden || !visible) return;
       const dt = Math.min(48, now - last);
       last = now;
       const current = waveState.current;
@@ -100,16 +101,22 @@ export function PlayerSlider({
       if (!reduce && !current.dragging && (current.playing || t < 1)) frame = requestAnimationFrame(draw);
     };
     const wake = () => {
-      if (frame || document.hidden) return;
+      if (frame || document.hidden || !visible) return;
       last = performance.now();
       frame = requestAnimationFrame(draw);
     };
     wakeWave.current = wake;
     const observer = new ResizeObserver(wake);
     observer.observe(canvas);
+    const visibility = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible) wake();
+      else { cancelAnimationFrame(frame); frame = 0; }
+    });
+    visibility.observe(canvas);
     document.addEventListener("visibilitychange", wake);
     wake();
-    return () => { wakeWave.current = () => {}; observer.disconnect(); document.removeEventListener("visibilitychange", wake); cancelAnimationFrame(frame); };
+    return () => { wakeWave.current = () => {}; observer.disconnect(); visibility.disconnect(); document.removeEventListener("visibilitychange", wake); cancelAnimationFrame(frame); };
   }, [wavy, style]);
 
   useEffect(() => { if (wavy) wakeWave.current(); }, [wavy, value, bufferedValue, max, playing, dragging]);

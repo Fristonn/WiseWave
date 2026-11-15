@@ -269,7 +269,7 @@ export function MiniPlayer() {
   const channel = useRef<BroadcastChannel | null>(null);
 
   const close = () => {
-    void MiniWindow.close().catch(() => setError("Mini player could not be closed."));
+    void MiniWindow.close().catch(() => setError("couldn't close the mini player"));
   };
 
   useEffect(() => {
