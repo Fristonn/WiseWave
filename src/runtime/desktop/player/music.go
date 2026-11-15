@@ -1,4 +1,4 @@
-package desktop
+package player
 
 import (
 	"context"
@@ -10,9 +10,11 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"wisewave-runtime/internal/cache"
+	"wisewave-runtime/internal/downloader"
 	"wisewave-runtime/internal/external/gaana"
 	"wisewave-runtime/internal/external/jiosaavn"
 	"wisewave-runtime/internal/external/spotify"
@@ -41,13 +43,16 @@ func audioFailureDiagnostic(err error) string {
 }
 
 type Music struct {
-	client  *innertube.Client
-	saavn   *jiosaavn.Client
-	gaana   *gaana.Client
-	spotify *spotify.Client
-	lyrics  *lyrics.Service
-	streams *cache.StreamCache
-	http    *http.Client
+	client        *innertube.Client
+	saavn         *jiosaavn.Client
+	gaana         *gaana.Client
+	spotify       *spotify.Client
+	lyrics        *lyrics.Service
+	streams       *cache.StreamCache
+	http          *http.Client
+	downloadsOnce sync.Once
+	downloads     *downloader.Service
+	downloadsErr  error
 }
 
 func NewMusic() *Music {

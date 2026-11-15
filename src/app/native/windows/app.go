@@ -6,8 +6,9 @@ import (
 	"log"
 
 	"github.com/egoist/mygo"
-	"wisewave-runtime/desktop"
 	spotifyaccount "wisewave-runtime/desktop/accounts/Spotify"
+	"wisewave-runtime/desktop/integrations"
+	"wisewave-runtime/desktop/player"
 	"wisewave/src/app/native/accounts/Spotify"
 	"wisewave/src/app/native/accounts/YouTube"
 	"wisewave/src/app/native/identity"
@@ -22,7 +23,7 @@ func Run(icon []byte) {
 		return
 	}
 	var engine *tokens.Engine
-	music := desktop.NewMusicWithTokens(func(ctx context.Context, videoID, visitor string) (string, string, error) {
+	music := player.NewMusicWithTokens(func(ctx context.Context, videoID, visitor string) (string, string, error) {
 		if engine == nil {
 			return "", "", errors.New("token engine unavailable")
 		}
@@ -36,19 +37,19 @@ func Run(icon []byte) {
 			}
 		}
 	})
-	playback := desktop.NewPlayback(music)
+	playback := player.NewPlayback(music)
 	mini := &MiniWindow{}
 	trayControl.minimizeToTray.Store(true)
-	discord := desktop.NewDiscord()
-	mediaSession := desktop.NewMediaSession(playback)
+	discord := integrations.NewDiscord()
+	mediaSession := integrations.NewMediaSession(playback)
 
 	spotifyAccount := spotifyaccount.NewSpotifyAccount()
 	spotifyaccount.WireSpotifySearch(spotifyAccount, music.Search)
 	spotifyLogin := spotify.NewSpotifyLogin(spotifyAccount)
-	youtubeAccount := desktop.NewYouTubeAccount(music)
+	youtubeAccount := player.NewYouTubeAccount(music)
 	youtubeLogin := youtube.NewYouTubeLogin(youtubeAccount)
 	mygo.Bind(music, playback, trayControl, mini, discord, mediaSession, spotifyAccount, spotifyLogin, youtubeAccount, youtubeLogin, &system.Clipboard{})
-	if err := mygo.Protocol.Handle("audio", desktop.Audio{Music: music}); err != nil {
+	if err := mygo.Protocol.Handle("audio", player.Audio{Music: music}); err != nil {
 		log.Fatal(err)
 	}
 	mygo.App.WhenReady(func() {

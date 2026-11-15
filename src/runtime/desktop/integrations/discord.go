@@ -1,4 +1,4 @@
-package desktop
+package integrations
 
 import (
 	"fmt"

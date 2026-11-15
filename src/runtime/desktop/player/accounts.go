@@ -1,4 +1,4 @@
-package desktop
+package player
 
 import "wisewave-runtime/desktop/accounts/YouTube"
 

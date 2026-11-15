@@ -1,4 +1,4 @@
-package desktop
+package player
 
 import (
 	"bytes"
@@ -128,7 +128,19 @@ func (p *Playback) load(id string, position float64, start bool) error {
 	var bitrate int
 	var duration time.Duration
 	var cached *cachedAudio
-	if p.audioCache != nil && videoID.MatchString(id) {
+	var localErr error
+	decoder, sb, duration, localErr = p.downloadedAudio(cancel, id)
+	if localErr != nil {
+		return errors.New("Saved audio could not be decoded; download this song again")
+	}
+	local := decoder != nil
+	originalID := id
+	if !local && videoID.MatchString(id) {
+		matchCtx, matchCancel := context.WithTimeout(ctx, 4*time.Second)
+		id = p.music.client.PreferredAudioID(matchCtx, id)
+		matchCancel()
+	}
+	if !local && p.audioCache != nil && videoID.MatchString(id) {
 		var err error
 		cached, err = p.audioCache.get(id)
 		if err != nil {
@@ -138,7 +150,14 @@ func (p *Playback) load(id string, position float64, start bool) error {
 			}
 		}
 	}
-	if cached != nil {
+	if local {
+		if duration <= 0 && decoder.Len() > 0 && decoder.SampleRate() > 0 {
+			duration = time.Duration(decoder.Len()) * time.Second / time.Duration(decoder.SampleRate())
+		}
+		if sb != nil && duration > 0 {
+			bitrate = int(float64(sb.contentLength*8) / duration.Seconds())
+		}
+	} else if cached != nil {
 		if limit := int(p.maxBitrate.Load()); limit > 0 && cached.bitrate > limit {
 			cached = nil
 		}
@@ -152,7 +171,7 @@ func (p *Playback) load(id string, position float64, start bool) error {
 			cached = nil
 		}
 	}
-	if cached != nil {
+	if !local && cached != nil {
 		sb = newStreamBuffer(io.NopCloser(bytes.NewReader(cached.data)), cancel, int64(len(cached.data)), cached.bitrate, cached.duration, nil)
 		var err error
 		decoder, err = newOpus(sb)
@@ -165,8 +184,12 @@ func (p *Playback) load(id string, position float64, start bool) error {
 		}
 		bitrate = cached.bitrate
 		duration = cached.duration
-	} else {
+	} else if !local {
 		stream, err := p.resolveStream(ctx, id)
+		if err != nil && id != originalID && ctx.Err() == nil {
+			id = originalID
+			stream, err = p.resolveStream(ctx, id)
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				log.Printf("resolve audio for %s: %s", id, audioFailureDiagnostic(err))

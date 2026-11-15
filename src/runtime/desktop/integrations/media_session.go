@@ -1,4 +1,4 @@
-package desktop
+package integrations
 
 import (
 	"io"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"wisewave-runtime/desktop/player"
 )
 
 var MediaAction = mygo.NewEvent[string]("media-action")
@@ -26,7 +27,7 @@ type MediaSessionState struct {
 
 type MediaSession struct {
 	mu          sync.Mutex
-	playback    *Playback
+	playback    *player.Playback
 	http        *http.Client
 	commandsOff func()
 	lastID      string
@@ -41,7 +42,7 @@ type MediaSession struct {
 	lastDur     float64
 }
 
-func NewMediaSession(playback *Playback) *MediaSession {
+func NewMediaSession(playback *player.Playback) *MediaSession {
 	session := &MediaSession{
 		playback: playback,
 		http:     &http.Client{Timeout: 8 * time.Second},
