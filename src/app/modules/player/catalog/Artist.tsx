@@ -1,3 +1,4 @@
+import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Play, Radio, Shuffle } from "lucide-react";
 import { Music, type ArtistDetail, type Track } from "../../../mygo";
@@ -143,11 +144,11 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
     <div className="artist-catalog">
       <section aria-labelledby="catalog-songs">
         <div className="artist-section-heading"><h2 id="catalog-songs">Top songs</h2><span>{tracks.length} songs</span></div>
-        {tracks.length ? <div className="artist-top-list">{visible.map((track, index) => <div className="catalog-song" key={track.id} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, .artist-links")) return; play(track, tracks); }}>
+        {tracks.length ? <div className="artist-top-list">{visible.map((track, index) => <div className="catalog-song" key={track.id} onContextMenu={(event) => openSongMenu(event, track)} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, .artist-links")) return; play(track, tracks); }}>
           <span className="catalog-song-number">{index + 1}</span>
           <button className="catalog-song-cover" type="button" aria-label={`Play ${track.title}`} onClick={() => play(track, tracks)}><Artwork src={track.album_art_url} size={48} lazy /><PlayingSpectrum active={current?.id === track.id} playing={playing} size={28} /><span><Play size={16} fill="currentColor" /></span></button>
           <div className="catalog-song-info"><button className="song-menu-title" type="button" onContextMenu={(event) => openSongMenu(event, track)} onClick={() => play(track, tracks)}><MarqueeText>{track.title}</MarqueeText></button><MarqueeText><ArtistLinks track={track} onOpen={onArtist} /></MarqueeText></div>
-          <span className="catalog-song-duration">{trackDurationLabel(track)}</span>
+          <span className="catalog-song-duration"><ExplicitBadge explicit={track.is_explicit} /><span>{trackDurationLabel(track)}</span></span>
         </div>)}</div> : <p className="feed-message">no songs for this artist yet</p>}
         {tracks.length > 20 && <button className="artist-show-all" type="button" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : `Show all ${tracks.length} songs`}</button>}
       </section>
@@ -155,7 +156,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
         <div className="artist-section-heading"><h2 id="artist-releases">Releases</h2><span>Albums</span></div>
         {artist.albums?.length ? <div className="artist-album-grid">{artist.albums.map((album) => <button type="button" className="artist-album" key={album.id} onClick={() => onAlbum(album.id)}>
           <span className="artist-album-cover"><Artwork src={album.artwork_url} size={192} lazy /><span><Play size={22} fill="currentColor" /></span></span>
-          <MarqueeText>{album.title}</MarqueeText><small>{[album.year, "Album"].filter(Boolean).join(" · ")}</small>
+          <MarqueeText>{album.title}</MarqueeText><small>{[album.year, "Album"].filter(Boolean).join(" - ")}</small>
         </button>)}</div> : <p className="feed-message">no albums for this artist yet</p>}
       </section>
     </div>

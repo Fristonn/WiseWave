@@ -1,3 +1,4 @@
+import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { useEffect, useRef, useState } from "react";
 import { PlayerSlider } from "./PlayerSlider";
 import { SearchSkeleton } from "../search/SearchSkeleton";
@@ -180,7 +181,7 @@ export function PlayerBar({
             </Tooltip>
             <div className="track-info-text">
               <div className="bar-title song-menu-title" onContextMenu={(event) => { if (music.track) openSongMenu(event, music.track); }}>
-                <MarqueeText className="track-title">{music.track.title}</MarqueeText>
+                <span className="explicit-title"><ExplicitBadge explicit={music.track.is_explicit} /><MarqueeText className="track-title">{music.track.title}</MarqueeText></span>
               </div>
               <MarqueeText className="track-artist" title={music.track.artist}>
                 <ArtistLinks track={music.track} onOpen={onArtist} />
