@@ -416,7 +416,7 @@ export function useMusic() {
       return;
     }
     try { localStorage.setItem("wisewave-history", JSON.stringify(history)); }
-    catch { setError("couldn't save your listening history"); }
+    catch { setError("couldn't save your recently played songs"); }
   }, [history, playbackSettings.hist]);
 
   useEffect(() => {

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
-import { Discord, TrayControl, type DiscordProfile, type SpotifyImportResult, type YouTubeImportResult, type Track } from "../../mygo";
-import { preferredArtworkURL } from "../../shared/ui/Artwork";
+import { isMyGo } from "mygo-runtime";
+import { Discord, Playback, TrayControl, events, type CachedSong, type DiscordProfile, type SpotifyImportResult, type YouTubeImportResult, type Track } from "../../mygo";
+import { Artwork, preferredArtworkURL } from "../../shared/ui/Artwork";
 import { Classic } from "../../shared/ui/Classic";
 import { MarqueeText } from "../../shared/ui/MarqueeText";
 import { PlayerAlert } from "../player/shared/PlayerAlert";
+import { useSnackbar } from "../../shared/ui/Snackbar";
 import { AudioLines, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, ExternalLink, LockKeyhole, Mic2, Palette, Search, X } from "lucide-react";
 import appIcon from "../../../../resources/images/icon.png";
 import lyricsLicense from "../../../../resources/licenses/accompanist-lyrics-license.txt?raw";
@@ -23,6 +25,7 @@ import { ProgressStylePreview } from "../player/playback/ProgressStylePreview";
 import { PROGRESS_STYLES, readProgressStyle, type ProgressStyle } from "../player/playback/progressStyle";
 import { readZoom, setZoom, ZOOM_LEVELS } from "../../shared/zoom";
 import { Equalizer } from "./Equalizer";
+import { DeleteConfirmation } from "../player/library/PlaylistMenu";
 import { YouTubeConnection, YouTubeIcon } from "../accounts/YouTube/YouTubeConnection";
 import { SpotifyConnection, SpotifyIcon } from "../accounts/Spotify/SpotifyConnection";
 
@@ -75,6 +78,7 @@ export interface SettingsProps {
   duration?: number;
   onImportSpotify?: (result: SpotifyImportResult) => number;
   onImportYouTube?: (result: YouTubeImportResult) => number;
+  knownTracks?: Track[];
 }
 
 const DEFAULT_SETTINGS = {
@@ -245,14 +249,15 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
       {
         h: "Saved music",
         r: [
-          { k: "hist", l: "Save listening history", d: "Keep a local record of the tracks you play.", t: "tog" },
+          { k: "hist", l: "Save recently played songs", d: "Remember recent songs for Home and recommendations.", t: "tog" },
           { k: "resume", l: "Resume playback", d: "Pick up where you left off after restarting WiseWave.", t: "tog" },
+          { l: "Songs saved for quick playback", d: "See songs kept temporarily to play faster.", a: "cache", b: "View", t: "btn" },
         ],
       },
       {
         h: "Maintenance",
         r: [
-          { l: "Clear listening history", d: "Delete locally stored listening history.", a: "hist", b: "Clear", t: "btn" },
+          { l: "Clear recently played songs", d: "Remove your recently played songs.", a: "hist", b: "Clear", t: "btn" },
         ],
       },
     ],
@@ -279,15 +284,15 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
     t: "Privacy",
     g: [
       {
-        h: "Listening",
+        h: "Recently played",
         r: [
-          { k: "hist", l: "Save listening history", d: "Keeps your listening activity on this device.", t: "tog" },
+          { k: "hist", l: "Save recently played songs", d: "Remember recent songs on this device.", t: "tog" },
         ],
       },
       {
         h: "Your data",
         r: [
-          { l: "Clear listening history", d: "Remove all saved listening history.", a: "hist", b: "Clear", t: "btn" },
+          { l: "Clear recently played songs", d: "Remove your recently played songs.", a: "hist", b: "Clear", t: "btn" },
         ],
       },
     ],
@@ -326,6 +331,50 @@ function DiscordIcon({ size = 18 }: { size?: number }) {
 
 const NAV_ICONS = { appearance: Palette, playback: AudioLines, lyrics: Mic2, library: BookOpen, spotify: SpotifyIcon, youtube: YouTubeIcon, discord: DiscordIcon, privacy: LockKeyhole, about: CircleHelp };
 
+function CachedSongs({ knownTracks, revision, onEmptyChange }: { knownTracks: Track[]; revision: number; onEmptyChange: (empty: boolean) => void }) {
+  const [songs, setSongs] = useState<CachedSong[] | null>(null);
+  const [details, setDetails] = useState<Map<string, { title: string; artist: string; artwork: string }>>(() => new Map(knownTracks.map((item) => [item.id, { title: item.title, artist: item.artist, artwork: item.album_art_url }])));
+  const [error, setError] = useState(false);
+  const [resolvingDetails, setResolvingDetails] = useState(true);
+
+  useEffect(() => {
+    onEmptyChange(songs !== null && songs.length === 0 && !error);
+  }, [songs, error, onEmptyChange]);
+
+  useEffect(() => {
+    if (!isMyGo()) return;
+    return events.cacheClearProgressChanged.on((next) => {
+      if (next.deleted_id) setSongs((current) => current?.filter((song) => song.id !== next.deleted_id) ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setResolvingDetails(true);
+    void Playback.listCachedSongs().then((items) => {
+      if (!cancelled) setSongs(items || []);
+    }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setResolvingDetails(false); });
+    return () => { cancelled = true; };
+  }, [revision]);
+
+  const unknownCount = songs?.filter((item) => !details.get(item.id)?.title).length || 0;
+
+  return <div className="settings-cached-songs player-scroll">
+    {error ? <p role="status">couldn't load cached songs</p> : songs === null ? <p role="status">loading cached songs…</p> : songs.length === 0 ? <p role="status">no songs saved for quick playback yet</p> : <>
+      <p className="settings-cached-count">{songs.length} {songs.length === 1 ? "song" : "songs"} using {(songs.reduce((total, item) => total + item.size, 0) / 1048576).toFixed(1)} MB of space</p>
+      <div className="settings-cached-list">{songs.filter((item) => Boolean(details.get(item.id)?.title)).map((item) => {
+        const song = details.get(item.id)!;
+        return <div className="settings-cached-item" key={item.id}>
+          <Artwork src={song.artwork || ""} size={48} className="settings-cached-art" lazy />
+          <span className="settings-cached-copy"><strong><MarqueeText>{song.title}</MarqueeText></strong><small><MarqueeText>{song.artist}</MarqueeText></small></span>
+          <small>{(item.size / 1048576).toFixed(1)} MB</small>
+        </div>;
+      })}</div>
+      {!resolvingDetails && unknownCount > 0 && <p className="settings-cached-count">{unknownCount} more {unknownCount === 1 ? "song is" : "songs are"} saved too, but their details aren't available.</p>}
+    </>}
+  </div>;
+}
+
 export function Settings({
   onClose,
   onClearHistory,
@@ -341,6 +390,7 @@ export function Settings({
   duration = 0,
   onImportSpotify,
   onImportYouTube,
+  knownTracks = [],
 }: SettingsProps) {
   const currentPosition = position;
   const currentDuration = duration;
@@ -371,6 +421,13 @@ export function Settings({
   const [activeSection, setActiveSection] = useState<string>("appearance");
   const [discordProfile, setDiscordProfile] = useState<DiscordProfile | null>(null);
   const [showLicenses, setShowLicenses] = useState(false);
+  const [showCachedSongs, setShowCachedSongs] = useState(false);
+  const [cachedSongsEmpty, setCachedSongsEmpty] = useState(false);
+  const [confirmClearCache, setConfirmClearCache] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
+  const [cacheRevision, setCacheRevision] = useState(0);
+  const [cachedSongsClosing, setCachedSongsClosing] = useState(false);
+  const cachedSongsTimer = useRef<number | null>(null);
   const [showLyricsSources, setShowLyricsSources] = useState(false);
   const [query, setQuery] = useState("");
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -385,6 +442,22 @@ export function Settings({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const mainRef = useRef<HTMLElement | null>(null);
+  const showSnackbar = useSnackbar();
+
+  const clearCache = async () => {
+    setConfirmClearCache(false);
+    setClearingCache(true);
+    showSnackbar({ key: "clear-audio-cache", text: "clearing saved songs", loading: true, duration: -2 });
+    try {
+      const result = await Playback.clearCachedSongs();
+      showSnackbar({ key: "clear-audio-cache", text: result.failed ? "couldn't clear some saved songs" : "saved songs cleared" });
+    } catch {
+      showSnackbar({ key: "clear-audio-cache", text: "couldn't clear saved songs" });
+    } finally {
+      setCacheRevision((value) => value + 1);
+      setClearingCache(false);
+    }
+  };
 
   useLayoutEffect(() => {
     const main = mainRef.current;
@@ -456,11 +529,11 @@ export function Settings({
   const updateSetting = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
     if (key === "hist" && value === false) {
       if (!onClearHistory()) {
-        setNote("couldn't clear your listening history");
+        setNote("couldn't clear your recently played songs");
         return;
       }
       saveSetting(key, value);
-      setNote("listening history cleared");
+      setNote("recently played songs cleared");
       return;
     }
     if (key === "startup") {
@@ -481,10 +554,15 @@ export function Settings({
   }, []);
 
   const handleAction = (actKey?: string) => {
+    if (actKey === "cache") {
+      setCachedSongsEmpty(false);
+      setShowCachedSongs(true);
+      return;
+    }
     if (actKey === "hist") {
       if (!confirmHistory) { setConfirmHistory(true); return; }
       setConfirmHistory(false);
-      setNote(onClearHistory() ? "listening history cleared" : "couldn't clear your listening history");
+      setNote(onClearHistory() ? "recently played songs cleared" : "couldn't clear your recently played songs");
       return;
     }
     setNote("that isn't available yet");
@@ -514,9 +592,24 @@ export function Settings({
     }, 150);
   };
 
+  const closeCachedSongs = () => {
+    if (cachedSongsTimer.current !== null) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce") {
+      setShowCachedSongs(false);
+      return;
+    }
+    setCachedSongsClosing(true);
+    cachedSongsTimer.current = window.setTimeout(() => {
+      setShowCachedSongs(false);
+      setCachedSongsClosing(false);
+      cachedSongsTimer.current = null;
+    }, 150);
+  };
+
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     if (progressPickerTimer.current !== null) window.clearTimeout(progressPickerTimer.current);
+    if (cachedSongsTimer.current !== null) window.clearTimeout(cachedSongsTimer.current);
   }, []);
 
   useEffect(() => {
@@ -527,7 +620,8 @@ export function Settings({
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (progressPickerOpen) closeProgressPicker();
+        if (showCachedSongs) closeCachedSongs();
+        else if (progressPickerOpen) closeProgressPicker();
         else if (openDropdown) setOpenDropdown(null);
         else closeSettings();
       }
@@ -538,7 +632,7 @@ export function Settings({
       document.removeEventListener("click", handleDocumentClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [openDropdown, progressPickerOpen]);
+  }, [openDropdown, progressPickerOpen, showCachedSongs]);
 
   const isDimmed = (dep?: keyof SettingsState) => {
     if (!dep) return false;
@@ -714,6 +808,12 @@ export function Settings({
         );
 
       case "btn":
+        if (r.a === "cache") return <div className="settings-cache-controls">
+          <div className="settings-action-buttons">
+            <button type="button" className="settings-btn" onClick={() => handleAction(r.a)}>View</button>
+            <button type="button" className="settings-btn" disabled={clearingCache} onClick={() => setConfirmClearCache(true)}>Clear cache</button>
+          </div>
+        </div>;
         return (
           <div className="settings-action-buttons">
             {r.a === "hist" && confirmHistory && <button type="button" className="settings-btn" onClick={() => setConfirmHistory(false)}>Cancel</button>}
@@ -952,6 +1052,17 @@ export function Settings({
         )}
       </main>
       </div>
+      {showCachedSongs && (
+        <div className={`settings-progress-picker${cachedSongsClosing ? " closing" : ""}`} role="dialog" aria-modal="true" aria-label={cachedSongsEmpty ? "Songs saved for quick playback" : undefined} aria-labelledby={cachedSongsEmpty ? undefined : "cached-songs-title"} onMouseDown={(event) => { if (event.target === event.currentTarget) closeCachedSongs(); }}>
+          <div className={`settings-progress-panel settings-cached-panel${cachedSongsEmpty ? " is-empty" : ""}`}>
+            <header>
+              {!cachedSongsEmpty && <div><h2 id="cached-songs-title">Songs saved for quick playback</h2><p>These songs are saved to play faster and removed automatically when space is needed.</p></div>}
+              <button type="button" autoFocus aria-label="Close cached songs" onClick={closeCachedSongs}><X size={18} /></button>
+            </header>
+            <CachedSongs knownTracks={knownTracks} revision={cacheRevision} onEmptyChange={setCachedSongsEmpty} />
+          </div>
+        </div>
+      )}
       {progressPickerOpen && (
         <div
           className={`settings-progress-picker${progressPickerClosing ? " closing" : ""}`}
@@ -998,6 +1109,7 @@ export function Settings({
           </div>
         </div>
       )}
+      {confirmClearCache && <DeleteConfirmation title="Clear cached songs?" description="This will remove temporarily cached songs. Your downloads won't be affected." onCancel={() => setConfirmClearCache(false)} onConfirm={() => { void clearCache(); }} />}
       <PlayerAlert message={note} onDismiss={dismissNote} />
     </div>
     </div>

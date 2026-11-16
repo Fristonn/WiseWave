@@ -272,7 +272,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
                 <button type="button" className="account-sync-close" aria-label="Close" onClick={closeSpotifyModal}>
                   <X size={18} />
                 </button>
-                <p>{feedbackText(spotifySync.error || "couldn't sync your spotify library")}</p>
+                <PlayerAlert message={feedbackText(spotifySync.error || "couldn't sync your spotify library")} onDismiss={() => {}} />
                 <button
                   type="button"
                   className="settings-btn"
