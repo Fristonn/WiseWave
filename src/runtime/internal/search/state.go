@@ -12,8 +12,8 @@ type PageState struct {
 }
 
 type State struct {
-	mu          sync.Mutex
-	pages       map[string]PageState
+	mu    sync.Mutex
+	pages map[string]PageState
 }
 
 func (c *State) Ranker() Ranker {

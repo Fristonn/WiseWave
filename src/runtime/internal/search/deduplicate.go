@@ -95,4 +95,5 @@ func fillMetadata(dst *models.Track, src models.Track) {
 		dst.DurationSeconds = src.DurationSeconds
 	}
 	dst.IsFavorite = dst.IsFavorite || src.IsFavorite
+	dst.IsExplicit = dst.IsExplicit || src.IsExplicit
 }

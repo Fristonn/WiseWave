@@ -12,7 +12,7 @@ type Weights struct{ Title, Artist, Coverage, Album, Provider, Preference float6
 var DefaultWeights = Weights{.42, .25, .10, .10, .08, .05}
 
 type Ranker struct {
-	Weights    Weights
+	Weights Weights
 }
 type Result struct {
 	Track models.Track
@@ -88,13 +88,47 @@ func (r Ranker) Rank(query string, tracks []models.Track) []Result {
 		if strings.Join(qt, " ") == strings.Join(tt, " ") {
 			score += .12
 		}
+		providerOrder := 1 / (1 + float64(i)*.08)
+		identity := append(append([]string{}, tt...), at...)
+		identityCoverage := coverage(qt, identity)
+		exactIdentity := exactTokenCoverage(qt, identity)
+		titleExact := strings.Join(qt, " ") == strings.Join(tt, " ")
+		artistExact := artist != "" && strings.Join(qt, " ") == strings.Join(at, " ")
+		tier := 0.0
+		switch {
+		case titleExact || artistExact || exactIdentity == 1:
+			tier = .75
+		case identityCoverage >= .85:
+			tier = .5
+		case identityCoverage >= .6:
+			tier = .25
+		}
+		score = tier + .16*providerOrder + .08*unit(score)
 		if versions(q) != versions(title) {
-			score *= .65
+			score -= .2
 		}
 		out = append(out, Result{t, unit(score)})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
 	return deduplicate(out)
+}
+
+func exactTokenCoverage(query, field []string) float64 {
+	if len(query) == 0 {
+		return 0
+	}
+	counts := make(map[string]int, len(field))
+	for _, word := range field {
+		counts[word]++
+	}
+	matched := 0
+	for _, word := range query {
+		if counts[word] > 0 {
+			counts[word]--
+			matched++
+		}
+	}
+	return float64(matched) / float64(len(query))
 }
 
 func (r Ranker) Tracks(query string, tracks []models.Track) []models.Track {
