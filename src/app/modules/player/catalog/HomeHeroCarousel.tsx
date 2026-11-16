@@ -246,8 +246,7 @@ export function HomeHeroCarousel({
 
     const layer = layerRef.current;
     if (layer) {
-      layer.style.transformOrigin = over < 0 ? "left center" : "right center";
-      layer.style.transform = over ? `scaleX(${1 + clamp(Math.abs(over) / st.L) * 0.2})` : "";
+      layer.style.transform = over ? `translateX(${-Math.sign(over) * Math.min(Math.abs(over) * 0.2, 32)}px)` : "";
     }
 
     if (nextPage !== pageRef.current) {
@@ -462,7 +461,10 @@ export function HomeHeroCarousel({
                     else goTo(i);
                   }}
                 >
-                  {Math.abs(i - page) <= 2 && <Artwork className="home-hero-art" src={track.album_art_url} size={640} />}
+                  {Math.abs(i - page) <= 2 && <>
+                    <span className="home-hero-backdrop" aria-hidden="true"><Artwork src={track.album_art_url} size={640} /></span>
+                    <Artwork className="home-hero-art" src={track.album_art_url} size={640} />
+                  </>}
                   <span className="home-hero-scrim" aria-hidden="true" />
                   <span className={`home-hero-copy${active ? " is-visible" : ""}`}>
                     <MarqueeText className="home-hero-title">{track.title}</MarqueeText>

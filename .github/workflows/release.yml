@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -62,6 +66,9 @@ jobs:
 
           $tag = "latest"
           $short = $env:GITHUB_SHA.Substring(0, 7)
+          $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
+          if ($versionSource -notmatch 'appVersion\s*=\s*"([^"]+)"') { throw "Could not read app version." }
+          $version = $Matches[1]
           $notes = @"
           Latest Windows installers from main.
 
@@ -79,9 +86,19 @@ jobs:
             throw "Expected amd64 and arm64 setup installers; found $($assets.Count): $($assets.Name -join ', ')"
           }
 
+          $stableAssets = @(
+            foreach ($architecture in @("amd64", "arm64")) {
+              $source = $assets | Where-Object { $_.Name -like "*-$architecture.exe" }
+              $destination = Join-Path $source.DirectoryName "wisewave-setup-$architecture.exe"
+              Copy-Item -LiteralPath $source.FullName -Destination $destination -Force
+              Get-Item -LiteralPath $destination
+            }
+          )
+          $publishAssets = @($assets.FullName) + @($stableAssets.FullName)
+
           # Replace any previous rolling release. Missing release/tag is fine.
           gh release delete $tag --yes --cleanup-tag *> $null
 
           $ErrorActionPreference = "Stop"
-          gh release create $tag --latest --title "WiseWave" --notes $notes --target $env:GITHUB_SHA -- $assets.FullName
+          gh release create $tag --latest --title "WiseWave $version" --notes $notes --target $env:GITHUB_SHA -- $publishAssets
           if ($LASTEXITCODE -ne 0) { throw "Could not publish release $tag." }

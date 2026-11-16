@@ -1020,6 +1020,7 @@ kbd {
 }
 
 .library-tools {
+  gap: 8px;
   height: 36px;
   display: flex;
   align-items: center;
@@ -1334,8 +1335,30 @@ kbd {
   pointer-events: none;
 }
 
-.home-hero-item .artwork img,
-.home-hero-item .artwork .artwork-placeholder-wrap {
+.home-hero-backdrop {
+  position: absolute;
+  inset: -24px;
+  overflow: hidden;
+  filter: blur(24px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.home-hero-backdrop .artwork,
+.home-hero-backdrop .artwork img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-hero-item > .home-hero-art {
+  position: relative;
+  background: transparent;
+  aspect-ratio: auto;
+}
+
+.home-hero-item > .home-hero-art img,
+.home-hero-item > .home-hero-art .artwork-placeholder-wrap {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3884,6 +3907,7 @@ kbd {
 }
 
 .library-sort {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -9210,8 +9234,8 @@ span.tooltip-trigger.mini-close-wrap {
 }
 
 .library-search.open {
-  flex: none;
-  width: 100%;
+  flex: 1 1 0;
+  width: 0;
   padding: 0 8px;
 }
 
