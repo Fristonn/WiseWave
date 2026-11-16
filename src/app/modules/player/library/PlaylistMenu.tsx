@@ -13,7 +13,7 @@ export function usePlaylistMenu() {
   return open;
 }
 
-function DeletePlaylistDialog({ playlist, onCancel, onConfirm }: { playlist: Playlist; onCancel: () => void; onConfirm: () => void }) {
+export function DeleteConfirmation({ title, description, onCancel, onConfirm }: { title: string; description: ReactNode; onCancel: () => void; onConfirm: () => void }) {
   const dialog = useRef<HTMLDivElement>(null);
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
@@ -33,8 +33,8 @@ function DeletePlaylistDialog({ playlist, onCancel, onConfirm }: { playlist: Pla
   }, []);
   return createPortal(<div className="playlist-dialog-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
     <div className="playlist-delete-dialog" ref={dialog} role="alertdialog" aria-modal="true" aria-labelledby="playlist-delete-title" aria-describedby="playlist-delete-description">
-      <h2 id="playlist-delete-title">Delete this playlist?</h2>
-      <p id="playlist-delete-description">This will delete <strong>{playlist.name}</strong> from your library.</p>
+      <h2 id="playlist-delete-title">{title}</h2>
+      <p id="playlist-delete-description">{description}</p>
       <div className="playlist-delete-actions"><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={onConfirm}>Delete</button></div>
     </div>
   </div>, document.body);
@@ -108,7 +108,7 @@ export function PlaylistMenuProvider({ children, playlists, onPlay, onQueue, onE
   return <Context.Provider value={open}>
     {children}
     {editPlaylist && <PlaylistDialog playlist={editPlaylist} onClose={() => setEditing(null)} onCreate={(name, description, cover) => { onEdit(editPlaylist.id, name, description, cover); setEditing(null); }} />}
-    {deletePlaylist && <DeletePlaylistDialog playlist={deletePlaylist} onCancel={() => setDeleting(null)} onConfirm={() => { onDelete(deletePlaylist); setDeleting(null); }} />}
+    {deletePlaylist && <DeleteConfirmation title="Delete this playlist?" description={<>This will delete <strong>{deletePlaylist.name}</strong> from your library.</>} onCancel={() => setDeleting(null)} onConfirm={() => { onDelete(deletePlaylist); setDeleting(null); }} />}
     {menu && playlist && createPortal(<div ref={root} className="song-menu" onContextMenu={(event) => event.preventDefault()}>
       <div className="song-menu-list" role="menu" aria-label={`Actions for ${playlist.name}`}>
         <button type="button" role="menuitem" disabled={!playlist.tracks.length} onClick={() => { onPlay(playlist); close(true); }}><Play /><span>Play</span></button>

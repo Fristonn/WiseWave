@@ -94,7 +94,7 @@ export function Library({ width, liked, playlists, active, onOpen, onCreate, dow
         <DownloadsCover className="library-downloads-cover" />
         <span className="library-item-copy">
           <MarqueeText className="library-item-title">Downloads</MarqueeText>
-          <MarqueeText className="library-item-meta">{downloadCount} {downloadCount === 1 ? "song" : "songs"}{downloadingCount > 0 ? ` · ${downloadingCount} downloading` : ""}</MarqueeText>
+          <MarqueeText className="library-item-meta">{downloadCount} {downloadCount === 1 ? "song" : "songs"}{downloadingCount > 0 ? ` - ${downloadingCount} downloading` : ""}</MarqueeText>
         </span>
       </button>
     </div>

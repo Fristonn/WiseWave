@@ -2,6 +2,10 @@ interface IconProps {
   className?: string;
 }
 
+export function SongInfoIcon({ className, size = 24 }: IconProps & { size?: number }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true" focusable="false"><path d="M3 5h9" /><path d="M3 12h9" /><path d="M3 19h5" /><circle cx="14.5" cy="17" r="2.8" /><path d="M17.3 17V5.5c0-.9 1-1.3 1.7-.8C20.5 5.8 21 6.8 21 8.5" /></svg>;
+}
+
 export {
   ArrowLeft as MenuBackIcon,
   Check as MenuCheckIcon,

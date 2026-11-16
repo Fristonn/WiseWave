@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { ArrowDownToLine, Download, LoaderCircle } from "lucide-react";
+import { Download, LoaderCircle } from "lucide-react";
 import type { OfflineTrack, Track } from "../../../mygo";
 import { Artwork } from "../../../shared/ui/Artwork";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
@@ -26,17 +26,21 @@ export function Downloads({ saved, jobs, loading, error, onReload, onRetry, onPl
     <p className="empty-subtitle">{loading ? "getting your saved songs" : "right click any song to download it for offline listening"}</p>
   </div>;
 
-  return <Collection kind="downloads" tracks={tracks} onPlay={onPlay} onArtist={onArtist} current={current} playing={playing} emptyState={error ? <></> : emptyState}>
-    {jobs.length > 0 && <div className="downloads-jobs" aria-live="polite">
-      {jobs.map((job) => <div key={job.track.id} className="downloads-job">
-        <Artwork className="song-artwork-img" src={job.track.album_art_url} size={40} />
-        <div className="downloads-job-copy">
-          <MarqueeText className="song-main-title">{job.track.title}</MarqueeText>
-          <span className={`song-sub-label${job.status === "failed" ? " downloads-failure" : ""}`}>{job.status === "downloading" ? "downloading…" : job.status === "queued" ? "waiting to download" : job.error}</span>
-        </div>
-        {job.status === "failed" ? <button className="downloads-retry" type="button" onClick={() => onRetry(job.track)}>retry</button> : job.status === "downloading" ? <LoaderCircle className="downloads-spinner" size={18} aria-label="Downloading" /> : <ArrowDownToLine size={18} aria-label="Queued" />}
-      </div>)}
-    </div>}
-    {error && <div className="downloads-error" role="alert"><span>{error}</span><button type="button" className="downloads-retry" onClick={onReload}>try again</button></div>}
+  return <Collection kind="downloads" tracks={tracks} onPlay={onPlay} onArtist={onArtist} current={current} playing={playing} emptyState={error || jobs.length ? <></> : emptyState}>
+    {jobs.map((job) => <div key={job.track.id} className={`collection-song-row downloads-job${job.status === "downloading" ? " is-downloading" : ""}`}>
+      <span className="song-index-num" aria-hidden="true">–</span>
+      <span className="collection-grid-cols collection-library-grid-cols">
+        <span className="song-title-cell">
+          <span className="song-artwork-container"><Artwork className="song-artwork-img" src={job.track.album_art_url} size={40} /></span>
+          <span className="downloads-job-copy">
+            <MarqueeText className="song-main-title">{job.track.title}</MarqueeText>
+            {job.status === "downloading" ? <span className="downloads-progress-line"><span className="downloads-progress" role="progressbar" aria-label={`downloading ${job.track.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={job.progress === undefined ? undefined : Math.round(job.progress * 100)}><span className={job.progress === undefined ? "indeterminate" : ""} style={job.progress === undefined ? undefined : { width: `${job.progress * 100}%` }} /></span><span className="downloads-progress-percent">{job.progress === undefined ? "—" : `${Math.round(job.progress * 100)}%`}</span></span> : <span className="song-sub-label">{job.status === "queued" ? "waiting to download" : "download failed"}</span>}
+          </span>
+        </span>
+        <span className="collection-meta-cell">{job.track.artist}</span>
+        <span className="col-date-header" />
+        {job.status === "failed" ? <button className="downloads-retry" type="button" onClick={() => onRetry(job.track)}>retry</button> : <span />}
+      </span>
+    </div>)}
   </Collection>;
 }
