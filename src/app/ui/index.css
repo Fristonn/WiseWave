@@ -35,12 +35,71 @@
   flex: none;
 }
 
+.downloads-job.is-downloading .song-artwork-img {
+  opacity: 0.55;
+  filter: grayscale(0.5);
+}
+
+.downloads-job.is-downloading .song-main-title {
+  color: #a4a4a4;
+}
+
 .downloads-job-copy {
   display: grid;
   gap: 4px;
   min-width: 0;
   flex: 1;
 }
+
+/* download progress */
+.downloads-progress {
+  height: 3px;
+  width: 100%;
+  max-width: 180px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #ffffff20;
+}
+
+.downloads-progress-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.downloads-progress-percent {
+  color: #a4a4a4;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.downloads-job.collection-song-row {
+  cursor: default;
+}
+
+.downloads-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+  transition: width 150ms linear;
+}
+
+.downloads-progress > span.indeterminate {
+  width: 35%;
+  animation: downloads-progress 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes downloads-progress {
+  from { transform: translateX(0); }
+  to { transform: translateX(185%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .downloads-progress > span.indeterminate { animation: none; }
+}
+
+:root[data-motion="reduce"] .downloads-progress > span.indeterminate { animation: none; }
 
 .downloads-retry {
   padding: 6px 0 6px 12px;
@@ -2503,6 +2562,17 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+.snackbar-loader {
+  flex: none;
+  animation: downloads-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snackbar-loader { animation: none; }
+}
+
+:root[data-motion="reduce"] .snackbar-loader { animation: none; }
+
 .snackbar-action, .snackbar-close {
   display: inline-flex;
   align-items: center;
@@ -4727,6 +4797,84 @@ kbd {
   font-size: 14px;
 }
 
+.settings-cached-count {
+  color: #b5bac1;
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.settings-cached-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(600px, calc(100vh - 120px));
+  min-height: 0;
+}
+
+.settings-cached-panel.is-empty {
+  position: relative;
+  min-height: 150px;
+  justify-content: center;
+}
+
+.settings-cached-panel.is-empty header {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  margin: 0;
+}
+
+.settings-cached-panel.is-empty .settings-cached-songs {
+  padding-right: 0;
+  text-align: center;
+}
+
+.settings-cached-songs {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 12px;
+}
+
+.settings-cache-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: none;
+}
+
+.settings-cached-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ffffff10;
+}
+
+.settings-cached-art {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 4px;
+}
+
+.settings-cached-copy {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-cached-copy strong, .settings-cached-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-cached-item small {
+  color: #b5bac1;
+  font-size: 13px;
+}
+
 .settings-in h2 {
   font-family: var(--font-player);
   font-size: 12px;
@@ -5589,15 +5737,6 @@ kbd {
 .settings-btn:hover {
   background: #424247;
   border-color: transparent;
-}
-
-.settings-btn-danger {
-  background: #3a1f22;
-  color: #ffb4b4;
-}
-
-.settings-btn-danger:hover {
-  background: #4a262a;
 }
 
 .settings-time {
@@ -6527,7 +6666,7 @@ kbd {
 .search-dropdown-clear {
   background: transparent;
   border: 0;
-  color: #a4a4a4b3;
+  color: #b3b3b3;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -6600,7 +6739,7 @@ kbd {
   width: 32px;
   height: 32px;
   margin-right: 4px;
-  color: #a4a4a4a6;
+  color: #f3727a;
 }
 
 .search-history-delete:hover, .search-history-delete:focus-visible {
@@ -10091,13 +10230,26 @@ span.tooltip-trigger.mini-close-wrap {
 }
 
 .catalog-song-duration {
-  width: 52px;
+  width: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
   flex: none;
   color: #a4a4a4;
   text-align: right;
   font: 400 14px/20px var(--font-player);
   font-variant-numeric: tabular-nums;
 }
+
+.explicit-badge { width: 14px; height: 14px; flex: none; color: #b3b3b3; vertical-align: middle; }
+.explicit-title { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; overflow: hidden; }
+.explicit-title > .player-marquee { min-width: 0; flex: 1; }
+
+/* song details */
+.song-duration-cell > .explicit-badge { margin-right: 8px; }
+.catalog-song-info { overflow: hidden; }
+
 
 .artist-show-all {
   margin: 14px 0 0 12px;
@@ -10460,6 +10612,16 @@ span.tooltip-trigger.mini-close-wrap {
 .album-hero .artist-hero-actions > .album-shuffle {
   background: #ffffff14;
 }
+
+.catalog-collection .album-heading { flex: 1; }
+.catalog-collection .artist-hero-actions { flex-wrap: nowrap; }
+.catalog-collection .artist-hero-actions > button { min-width: 0; padding: 0 20px; }
+.catalog-collection .artist-hero-actions > .catalog-collection-options { flex: none; width: 40px; min-width: 40px; padding: 0; background: transparent; }
+.catalog-collection-playlist .album-hero { align-items: center; padding-bottom: 24px; }
+.catalog-collection-playlist .album-cover { width: clamp(144px, 16vw, 192px); }
+.catalog-collection-playlist .artist-hero-actions { margin-top: 20px; }
+.catalog-collection-playlist .album-byline { margin-top: 12px; }
+.catalog-collection-playlist .album-description { margin-top: 10px; font-size: 13px; }
 
 .album-columns {
   display: flex;
@@ -11232,7 +11394,6 @@ span.tooltip-trigger.mini-close-wrap {
 .song-menu-list {
   max-height: calc(100vh - 16px);
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .song-menu-list > button, .song-menu-submenu button {
@@ -11282,7 +11443,11 @@ span.tooltip-trigger.mini-close-wrap {
   width: 16px;
   height: 16px;
   flex: none;
-  color: #b3b3b3;
+  color: rgba(255, 255, 255, 1);
+}
+
+.song-menu button svg.song-menu-liked {
+  color: #ca5269;
 }
 
 .song-menu-list > button.song-menu-danger svg,
@@ -12038,3 +12203,5 @@ button:disabled:has(.classic) .classic {
 :root[data-motion="reduce"] .snackbar-progress-fill {
   transition: none;
 }
+
+.catalog-playlist-search { margin: 0 0 12px auto; }
