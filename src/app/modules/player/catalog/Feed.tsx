@@ -1,3 +1,5 @@
+import { CatalogCollection } from "./CatalogCollection";
+import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { Classic } from "../../../shared/ui/Classic";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, Compass, History, ListPlus, MoreVertical, Play, Radio, Search, Shuffle } from "lucide-react";
@@ -135,7 +137,7 @@ function Rows({
   return (
     <div className={edgeFade ? `track-row track-row-fade${fade.left ? " fade-left" : ""}${fade.right ? " fade-right" : ""}` : "track-row"} ref={rowRef}>
       {validTracks.map((track) => (
-        <article className="track-card" key={track.id}>
+        <article className="track-card" key={track.id} onContextMenu={(event) => openSongMenu(event, track)}>
           <div
             className="track-art-wrap"
             onPointerLeave={(event) => {
@@ -173,7 +175,7 @@ function Rows({
             </Tooltip>
           </div>
           <button className="card-title song-menu-title" type="button" onContextMenu={(event) => openSongMenu(event, track)} onClick={() => onPlay(track, validTracks)}>
-            <MarqueeText className="track-title">{track.title}</MarqueeText>
+            <span className="explicit-title"><ExplicitBadge explicit={track.is_explicit} /><MarqueeText className="track-title">{track.title}</MarqueeText></span>
           </button>
           <MarqueeText className="track-artist" title={track.artist}>
             <ArtistLinks track={track} onOpen={onArtist} />
@@ -282,7 +284,7 @@ function QuickPicks({
                         openSongMenu(event, track);
                       }}
                     >
-                      <MarqueeText>{track.title}</MarqueeText>
+                      <span className="explicit-title"><ExplicitBadge explicit={track.is_explicit} /><MarqueeText>{track.title}</MarqueeText></span>
                     </button>
                     <span className="quick-pick-artist" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                       <MarqueeText title={track.artist}>
@@ -344,7 +346,7 @@ function FeedSection({ title, description, count, children, empty, onNearEnd, no
 const mixCache = new Map<string, Track[]>();
 const mixRequests = new Map<string, Promise<Track[]>>();
 
-function loadMix(track: Track) {
+export function loadMix(track: Track) {
   const cached = mixCache.get(track.id);
   if (cached) return Promise.resolve(cached);
   const pending = mixRequests.get(track.id);
@@ -470,7 +472,6 @@ function FeedContent({ history, popular, forYou, searchResults, albumResults = [
     return () => window.removeEventListener("wisewave-artwork-failed", onFailed);
   }, [mixes]);
 
-  const mixTheme = useArtworkTheme(mix);
 
   const cachedDiscover = getDiscoverCache();
   const isDiscoverExpired = Date.now() - cachedDiscover.timestamp >= DISCOVER_REFRESH_INTERVAL_MS;
@@ -669,7 +670,6 @@ function FeedContent({ history, popular, forYou, searchResults, albumResults = [
   });
   const [mixError, setMixError] = useState("");
   const [mixLoading, setMixLoading] = useState(() => Boolean(mix && !mixCache.has(mix.id)));
-  const [mixQuery, setMixQuery] = useState("");
   const [mixRetry, setMixRetry] = useState(0);
 
   useEffect(() => {
@@ -697,12 +697,11 @@ function FeedContent({ history, popular, forYou, searchResults, albumResults = [
       setMixTracks(mixCache.get(mix.id)!);
       setMixLoading(false);
       setMixError("");
-      setMixQuery("");
       return;
     }
     let active = true;
     if (mixRetry > 0) mixCache.delete(mix.id);
-    setMixTracks([]); setMixError(""); setMixLoading(true); setMixQuery("");
+    setMixTracks([]); setMixError(""); setMixLoading(true);
     loadMix(mix).then((full) => {
       if (active) setMixTracks(full);
     }).catch(() => {
@@ -713,152 +712,7 @@ function FeedContent({ history, popular, forYou, searchResults, albumResults = [
     return () => { active = false; };
   }, [mix, mixRetry]);
   if (searchQuery) return <SearchResults query={searchQuery} category={searchCategory} onCategory={onSearchCategory} loading={searchLoading} error={searchError} tracks={searchResults} albums={albumResults} artists={artistResults} playlists={playlistResults} current={current} playing={playing} onPlay={onPlay} onArtist={onArtist} onAlbum={onAlbum || (() => {})} onPlaylist={onPlaylist || (() => {})} />;
-  if (mix) {
-    const visible = mixTracks.filter((track) => `${track.title} ${track.artist}`.toLowerCase().includes(mixQuery.trim().toLowerCase()));
-    const shuffle = () => {
-      const shuffled = [...mixTracks];
-      for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
-      if (shuffled.length) onPlay(shuffled[0], shuffled);
-    };
-    return (
-      <div className="view-enter collection mix-view">
-        <div
-          className="collection-header mix-header"
-          style={{ background: mixTheme.gradient }}
-        >
-          <button className="artist-back" type="button" aria-label="Back from daily mix" onClick={onBack}><ArrowLeft size={20} /></button>
-          <div className="collection-heading">
-            <Artwork className="collection-cover" src={mix.album_art_url} size={176} />
-            <div className="collection-heading-meta">
-              <p className="collection-header-category">Made for you</p>
-              <h1 className="collection-header-title">Daily Mix</h1>
-              <p className="collection-header-desc">{mix.artist} and more music to get lost in.</p>
-              <p className="collection-header-stats">
-                {mixLoading ? "Finding your next favorites…" : `${mixTracks.length} ${mixTracks.length === 1 ? "song" : "songs"}`}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="collection-content">
-          <div className="collection-toolbar">
-            <div className="mix-toolbar-left">
-              <button
-                className="collection-play-btn"
-                type="button"
-                aria-label="Play daily mix"
-                disabled={!mixTracks.length || mixLoading}
-                onClick={() => onPlay(mixTracks[0], mixTracks)}
-              >
-                <Play size={24} fill="currentColor" />
-              </button>
-              <button
-                className="detail-icon"
-                type="button"
-                aria-label="Shuffle daily mix"
-                disabled={!mixTracks.length || mixLoading}
-                onClick={shuffle}
-              >
-                <Shuffle size={22} />
-              </button>
-            </div>
-
-            <label className="collection-search-label">
-              <Search className="search-icon" size={16} />
-              <input
-                type="search"
-                aria-label="Search in daily mix"
-                placeholder="Search in this mix"
-                value={mixQuery}
-                onChange={(event) => setMixQuery(event.target.value)}
-              />
-            </label>
-          </div>
-
-          {mixError ? (
-            <div className="detail-empty">
-              <PlayerAlert message={mixError} onDismiss={() => {}} action={{ label: "retry", onClick: () => setMixRetry((value) => value + 1) }} />
-              <button className="artist-secondary" type="button" onClick={() => setMixRetry((value) => value + 1)}>
-                try again
-              </button>
-            </div>
-          ) : mixLoading ? (
-            <p className="detail-empty loading-state" role="status">
-              <Classic />loading your mix…
-            </p>
-          ) : (
-            <>
-              <div className="collection-table-header">
-                <span className="col-num-header">#</span>
-                <span className="collection-grid-cols">
-                  <span className="col-title-header">Title</span>
-                  <span className="col-author-header">Artist</span>
-                  <Clock3 className="col-duration-icon" size={16} />
-                </span>
-              </div>
-
-              <div className="collection-songs-list">
-                {visible.map((track, index) => (
-                  <div
-                    className="collection-song-row"
-                    key={track.id}
-                    onClick={() => onPlay(track, mixTracks)}
-                  >
-                    <span className="song-index-num">{index + 1}</span>
-
-                    <span className="collection-grid-cols">
-                      <span className="song-title-cell">
-                        <span className="song-artwork-container">
-                          <Artwork
-                            className="song-artwork-img"
-                            src={track.album_art_url}
-                            size={40}
-                            lazy
-                          />
-                          <PlayingSpectrum active={current?.id === track.id} playing={playing} size={24} />
-                          <span className="song-play-hover-overlay">
-                            <Play size={16} fill="#ffffff" />
-                          </span>
-                        </span>
-                        <span className="song-title-wrapper">
-                          <button
-                            type="button"
-                            className="song-main-title song-menu-title"
-                            onContextMenu={(event) => openSongMenu(event, track)}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPlay(track, mixTracks);
-                            }}
-                          >
-                            <MarqueeText>{track.title}</MarqueeText>
-                          </button>
-                          <small className="song-sub-label">{track.album || "Daily Mix"}<span className="song-compact-artist"> · <ArtistLinks track={track} onOpen={onArtist} /></span></small>
-                        </span>
-                      </span>
-
-                      <span className="song-author-cell">
-                        <MarqueeText className="song-author-marquee">
-                          <ArtistLinks track={track} onOpen={onArtist} />
-                        </MarqueeText>
-                      </span>
-                      <span className="song-duration-cell">
-                        <span className="duration-digits">{trackDurationLabel(track)}</span>
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {!visible.length && (
-                <p className="detail-empty">
-                  {mixQuery ? "no songs match your search" : "no songs in this mix yet"}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
+  if (mix) return <CatalogCollection kind="playlist" searchContext="mix" id={`mix:${mix.id}`} category="Made for you" localData={{ id: `mix:${mix.id}`, title: "Daily Mix", author: "", description: `${mix.artist} and more music to get lost in`, artwork_url: mix.album_art_url, tracks: mixTracks }} loading={mixLoading} loadError={mixError} onRetry={() => setMixRetry((value) => value + 1)} onBack={onBack} onPlay={onPlay} onArtist={onArtist} current={current} playing={playing} />;
 
   return <>
     <div className="home-hero-wrap">

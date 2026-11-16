@@ -1,3 +1,5 @@
+import { CatalogCollection } from "../catalog/CatalogCollection";
+import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Clock3, Heart, ListMusic, Search } from "lucide-react";
 import type { Track } from "../../../mygo";
@@ -21,11 +23,13 @@ export function Collection({
   onPlay,
   onArtist,
   onAlbum,
+  onBack,
   current = null,
   playing = false,
   children,
   emptyState,
 }: {
+  onBack?: () => void;
   kind: "liked" | "playlist" | "downloads";
   playlist?: Playlist;
   tracks: LibraryTrack[];
@@ -79,6 +83,8 @@ export function Collection({
     return artworkURL(source, 256) || source;
   }, [kind, playlist?.cover, tracks, coverFailed]);
   const playlistTheme = useImageTheme(playlistArtwork || null, DEFAULT_PLAYLIST_THEME);
+
+  if (kind === "playlist" && playlist) return <CatalogCollection kind="playlist" id={playlist.id} localData={{ id: playlist.id, title: playlist.name, description: playlist.description, artwork_url: playlist.cover || "", author: "", tracks }} onBack={onBack || (() => {})} onPlay={(track, queue) => onPlay(track, queue, { collection: true })} onArtist={onArtist} current={current} playing={playing} onCollectionMenu={(event) => openPlaylistMenu(event, playlist)} />;
 
   return (
     <section className={`view-enter collection collection-${kind}`}>
@@ -141,7 +147,7 @@ export function Collection({
           </label>
         </div>
 
-        {children}
+        {kind !== "downloads" && children}
 
         <div className="collection-table-header collection-library-table-header">
           <span className="col-num-header">#</span>
@@ -154,6 +160,7 @@ export function Collection({
         </div>
 
         <div className="collection-songs-list">
+          {kind === "downloads" && children}
           {visibleSongs.map((song, index) => (
             <div
               aria-label={`Play ${song.title} by ${song.artist}`}
@@ -161,7 +168,7 @@ export function Collection({
               key={song.id}
               role="button"
               tabIndex={0}
-              onContextMenu={kind !== "playlist" ? (event) => openSongMenu(event, song, kind === "liked" ? { kind: "liked" } : undefined) : undefined}
+              onContextMenu={(event) => openSongMenu(event, song, kind === "playlist" && playlist ? { kind: "playlist", id: playlist.id } : kind === "liked" ? { kind: "liked" } : { kind: "downloads" })}
               onClick={() => onPlay(song, visibleSongs, { collection: true })}
               onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onPlay(song, visibleSongs, { collection: true }); } }}
             >
@@ -174,7 +181,7 @@ export function Collection({
                       className="song-artwork-img"
                       src={song.album_art_url}
                       size={40}
-                      lazy
+                      lazy={index >= 12}
                     />
                     <PlayingSpectrum active={current?.id === song.id} playing={playing} size={24} />
                     <span className="song-play-hover-overlay">
@@ -206,7 +213,7 @@ export function Collection({
                 </span>
 
                 <span className="song-duration-cell">
-                  <span className="duration-digits">{trackDurationLabel(song)}</span>
+                  <ExplicitBadge explicit={song.is_explicit} /><span className="duration-digits">{trackDurationLabel(song)}</span>
                 </span>
               </span>
             </div>
