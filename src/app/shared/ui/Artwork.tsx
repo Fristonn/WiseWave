@@ -56,8 +56,9 @@ function isYtimg(hostname: string) {
   return /(^|\.)ytimg\.com$/i.test(hostname);
 }
 
-function isAcceptableCover(width: number, height: number, allowWide = false) {
-  if (width < 48 || height < 48) return false;
+function isAcceptableCover(width: number, height: number, allowWide = false, requestedSize = 48) {
+  const minimum = Math.min(48, requestedSize);
+  if (width < minimum || height < minimum) return false;
   if (allowWide) return true;
   const ratio = width / height;
   return ratio >= 0.88 && ratio <= 1.14;
@@ -138,7 +139,7 @@ function warmArtwork() {
     const finish = (loaded: boolean) => {
       let allowWide = false;
       try { allowWide = isYtimg(new URL(item.url).hostname); } catch {}
-      if (loaded && isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide)) markLoaded(item.url, item.src, image.naturalWidth, image.naturalHeight, item.size);
+      if (loaded && isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide, item.size)) markLoaded(item.url, item.src, image.naturalWidth, image.naturalHeight, item.size);
       pendingUrls.delete(item.url);
       preloading--;
       warmArtwork();
@@ -222,7 +223,7 @@ export function Artwork({ src, size, className = "", lazy = false, rootMargin = 
       className={isLoaded ? "loaded" : ""}
       onLoad={(event) => {
         const image = event.currentTarget;
-        if (isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide)) {
+        if (isAcceptableCover(image.naturalWidth, image.naturalHeight, allowWide, requestedSize)) {
           markLoaded(url, src, image.naturalWidth, image.naturalHeight, requestedSize);
           setLoadedUrl(url);
           setDisplayedImage({ src, url });
