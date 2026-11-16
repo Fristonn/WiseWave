@@ -5355,6 +5355,10 @@ kbd {
 }
 
 .settings-zoom-preview {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   display: grid;
   justify-items: center;
   gap: 12px;
@@ -6106,6 +6110,7 @@ kbd {
   padding: 18px 20px 14px;
 }
 
+.account-sync-profile > .account-sync-avatar,
 .account-sync-profile img,
 .account-sync-avatar-fallback {
   width: 68px;

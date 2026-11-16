@@ -1,3 +1,4 @@
+import { Artwork } from "../../../shared/ui/Artwork";
 import { accountText } from "../shared/accountText";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
@@ -13,8 +14,10 @@ export function YouTubeIcon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 26 26" fill="none" aria-hidden="true"><path d="M13 26C20.176 26 26 20.176 26 13S20.176 0 13 0 0 5.824 0 13s5.824 13 13 13Z" fill="#f03" /><path d="M20.5 13a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" stroke="#fff" /><path d="m17.75 13-7.5-4.25v8.5z" fill="#fff" /></svg>;
 }
 
+let lastAccount: YouTubeAccountStatus | null = null;
+
 export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImportResult) => number }) {
-  const [account, setAccount] = useState<YouTubeAccountStatus | null>(null);
+  const [account, setAccount] = useState<YouTubeAccountStatus | null>(() => lastAccount);
   const [login, setLogin] = useState<YouTubeLoginStatus>({ busy: false, error: "" });
   const [sync, setSync] = useState<YouTubeSyncStatus | null>(null);
   const [pending, setPending] = useState(false);
@@ -38,7 +41,7 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
         if (!mounted.current) return;
         if (lastLinked.current === false && nextAccount.linked) { setModal(true); setClosing(false); }
         lastLinked.current = nextAccount.linked;
-        setAccount(nextAccount); setLogin(nextLogin); setSync(nextSync);
+        lastAccount = nextAccount; setAccount(nextAccount); setLogin(nextLogin); setSync(nextSync);
         if (!nextAccount.linked) { setModal(false); setImporting(null); }
       } catch {
         if (mounted.current) setError("youtube music sign-in works in the desktop app");
@@ -70,7 +73,7 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
       else if (action === "logout") await YouTubeLogin.logout();
       else { const status = await YouTubeAccount.syncLibrary(); if (mounted.current) setSync(status); }
       const [nextAccount, nextLogin] = await Promise.all([YouTubeAccount.status(), YouTubeLogin.status()]);
-      if (mounted.current) { setAccount(nextAccount); setLogin(nextLogin); if (action === "logout") { setModal(false); setSync(null); setNote("logged out of youtube music"); } }
+      if (mounted.current) { lastAccount = nextAccount; setAccount(nextAccount); setLogin(nextLogin); if (action === "logout") { setModal(false); setSync(null); setNote("logged out of youtube music"); } }
     } catch (cause) {
       if (mounted.current) setError(cause instanceof Error ? cause.message : "couldn't finish that youtube music action");
     } finally { if (mounted.current) setPending(false); }
@@ -111,7 +114,7 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
   return <>
     <section className="settings-account" aria-label="YouTube Music account">
       {account?.linked ? <div className="settings-account-card is-linked">
-        <div className="settings-account-identity"><div className="settings-account-avatar-wrap">{account.image_url ? <img className="settings-account-avatar" src={account.image_url} alt="" referrerPolicy="no-referrer" width={72} height={72} /> : <span className="settings-account-avatar is-fallback">{account.display_name.slice(0, 1)}</span>}</div>
+        <div className="settings-account-identity"><div className="settings-account-avatar-wrap">{account.image_url ? <Artwork className="settings-account-avatar" src={account.image_url} size={72} /> : <span className="settings-account-avatar is-fallback">{account.display_name.slice(0, 1)}</span>}</div>
           <div className="settings-account-copy"><strong>{account.display_name}</strong>{username && <small>@{username}</small>}</div>
           <small className="settings-account-status youtube-status">{importing ? accountText.importing : sync?.phase === "syncing" || busy ? accountText.syncing : <><span className="settings-nav-icon is-youtube"><YouTubeIcon size={18} /></span>{accountText.connected}</>}</small>
         </div>
@@ -126,7 +129,7 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
     <AccountLibraryDialog open={modal} closing={closing} title="YouTube Music library" provider="youtube" onClose={closeModal}>
       {loading ? <div className="account-sync-loading" role="status" aria-live="polite"><button className="account-sync-close" type="button" aria-label="Cancel loading" onClick={closeModal}><X size={18} /></button><div className="account-sync-spinner" aria-hidden="true"><i /><i /><i /></div><div className="account-sync-shimmer">{accountText.loading}</div><small>{accountText.reading}</small></div> : sync?.phase === "error" ? <div className="account-sync-error"><button className="account-sync-close" type="button" aria-label="Close library" onClick={closeModal}><X size={18} /></button><PlayerAlert message={feedbackText(sync.error)} onDismiss={() => {}} /><button className="settings-btn" type="button" disabled={pending} onClick={() => { void act("sync"); }}>try again</button></div> : library ? <>
 
-        <div className="account-sync-body"><div className="account-sync-profile">{account?.image_url ? <img src={account.image_url} alt="" width={68} height={68} referrerPolicy="no-referrer" /> : <span className="account-sync-avatar-fallback"><YouTubeIcon size={40} /></span>}<div><strong>{library.display_name}</strong>{username && <small>@{username}</small>}</div><button className="account-sync-close" type="button" disabled={Boolean(importing)} aria-label="Close library" onClick={closeModal}><X size={18} /></button></div>
+        <div className="account-sync-body"><div className="account-sync-profile">{account?.image_url ? <Artwork className="account-sync-avatar" src={account.image_url} size={68} /> : <span className="account-sync-avatar-fallback"><YouTubeIcon size={40} /></span>}<div><strong>{library.display_name}</strong>{username && <small>@{username}</small>}</div><button className="account-sync-close" type="button" disabled={Boolean(importing)} aria-label="Close library" onClick={closeModal}><X size={18} /></button></div>
         <div className="account-sync-stats"><div><b>{library.liked_songs}</b><span>Liked music</span></div><div><b>{library.playlist_count}</b><span>Playlists</span></div></div>
         <div className="account-sync-list player-scroll" aria-label="YouTube Music collections">
           <div className="account-sync-row is-liked"><img className="account-sync-cover" src={youtubeLikedMusicArt} alt="" width={48} height={48} /><div className="account-sync-row-copy"><MarqueeText className="account-sync-row-title">Liked music</MarqueeText><span className="account-sync-row-meta">{library.liked_songs} tracks</span></div><button className="account-sync-import" type="button" disabled={!onImport || Boolean(importing) || !library.liked_songs} aria-busy={importing === "liked"} onClick={() => { void importCollection("liked"); }}>{importing === "liked" ? accountText.importing : "Import"}</button></div>

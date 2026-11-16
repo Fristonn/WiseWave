@@ -48,11 +48,11 @@ function ZoomControl() {
     return () => window.removeEventListener("wisewave-zoom-changed", sync);
   }, []);
   return <div className="settings-zoom">
-    <div className="settings-zoom-previews" aria-hidden="true">
-      {["Dense", "Default", "Spacious"].map((label, index) => <div key={label} className={`settings-zoom-preview ${index === (zoom < 1 ? 0 : zoom > 1 ? 2 : 1) ? "is-active" : ""}`}>
+    <div className="settings-zoom-previews" role="group" aria-label="Scale presets">
+      {[{ label: "Dense", scale: 0.9 }, { label: "Default", scale: 1 }, { label: "Spacious", scale: 1.1 }].map(({ label, scale }, index) => <button type="button" key={label} className={`settings-zoom-preview ${index === (zoom < 1 ? 0 : zoom > 1 ? 2 : 1) ? "is-active" : ""}`} aria-pressed={index === (zoom < 1 ? 0 : zoom > 1 ? 2 : 1)} onClick={() => setZoom(scale)}>
         <span className={`settings-zoom-diagram diagram-${index}`}><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></span>
         <span>{label}</span>
-      </div>)}
+      </button>)}
     </div>
     <div className="settings-zoom-levels" role="radiogroup" aria-label="Zoom level">
       {ZOOM_LEVELS.map((level) => <label className="settings-zoom-option" key={level}>
@@ -249,7 +249,6 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
       {
         h: "Saved music",
         r: [
-          { k: "hist", l: "Save recently played songs", d: "Remember recent songs for Home and recommendations.", t: "tog" },
           { k: "resume", l: "Resume playback", d: "Pick up where you left off after restarting WiseWave.", t: "tog" },
           { l: "Songs saved for quick playback", d: "See songs kept temporarily to play faster.", a: "cache", b: "View", t: "btn" },
         ],
@@ -283,12 +282,6 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
   privacy: {
     t: "Privacy",
     g: [
-      {
-        h: "Recently played",
-        r: [
-          { k: "hist", l: "Save recently played songs", d: "Remember recent songs on this device.", t: "tog" },
-        ],
-      },
       {
         h: "Your data",
         r: [
