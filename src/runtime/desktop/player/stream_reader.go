@@ -42,6 +42,13 @@ func openAudioStream(ctx context.Context, client *http.Client, streamURL, userAg
 }
 
 func audioRangeRequest(ctx context.Context, client *http.Client, streamURL, userAgent string, start int64, ranged bool) (*http.Response, error) {
+	path := ""
+	if ranged {
+		path = audioRangeCachePath(streamURL, start)
+		if cached := readAudioRange(path); cached != nil {
+			return cached, nil
+		}
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
 		return nil, err
@@ -50,7 +57,14 @@ func audioRangeRequest(ctx context.Context, client *http.Client, streamURL, user
 	if ranged {
 		request.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, start+audioRangeSize-1))
 	}
-	return client.Do(request)
+	response, err := client.Do(request)
+	if err == nil && path != "" && response.StatusCode == http.StatusPartialContent && !isUMPResponse(response) {
+		actualStart, end, _, ok := parseAudioContentRange(response.Header.Get("Content-Range"), streamURL)
+		if ok && actualStart == start && end-start+1 <= audioRangeSize {
+			response.Body = &cachingAudioRange{ReadCloser: response.Body, path: path, expected: end - start + 1, saved: savedAudioRange{ContentRange: response.Header.Get("Content-Range"), ContentType: response.Header.Get("Content-Type")}}
+		}
+	}
+	return response, err
 }
 
 func parseAudioContentRange(value, streamURL string) (int64, int64, int64, bool) {

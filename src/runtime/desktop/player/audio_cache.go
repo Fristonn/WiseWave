@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/egoist/mygo"
 )
 
 const audioCacheLimit int64 = 1 << 30
@@ -21,6 +23,95 @@ type cachedAudio struct {
 	data     []byte
 	bitrate  int
 	duration time.Duration
+}
+
+type CachedSong struct {
+	ID   string `json:"id"`
+	Size int64  `json:"size"`
+}
+
+type CacheClearProgress struct {
+	Completed int    `json:"completed"`
+	Total     int    `json:"total"`
+	DeletedID string `json:"deleted_id"`
+	Failed    int    `json:"failed"`
+}
+
+var CacheClearProgressChanged = mygo.NewEvent[CacheClearProgress]("cache-clear-progress-changed")
+
+func (p *Playback) ClearCachedSongs() (CacheClearProgress, error) {
+	if p.audioCache == nil {
+		return CacheClearProgress{}, errors.New("audio cache unavailable")
+	}
+	c := p.audioCache
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		return CacheClearProgress{}, err
+	}
+	var names []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if (strings.HasPrefix(name, ".audio-") && strings.HasSuffix(name, ".part")) || strings.HasSuffix(name, ".wwchunk") {
+			if !entry.IsDir() {
+				names = append(names, name)
+			}
+			continue
+		}
+		id := strings.TrimSuffix(name, ".wwaudio")
+		if name == id || !videoID.MatchString(id) || entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		names = append(names, name)
+	}
+	progress := CacheClearProgress{Total: len(names)}
+	_ = CacheClearProgressChanged.Broadcast(progress)
+	for _, name := range names {
+		progress.DeletedID = ""
+		if err := os.Remove(filepath.Join(c.dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			log.Printf("remove cached audio: %v", err)
+			progress.Failed++
+		} else {
+			if strings.HasSuffix(name, ".wwaudio") {
+				progress.DeletedID = strings.TrimSuffix(name, ".wwaudio")
+			}
+		}
+		progress.Completed++
+		_ = CacheClearProgressChanged.Broadcast(progress)
+	}
+	return progress, nil
+}
+
+func (p *Playback) ListCachedSongs() ([]CachedSong, error) {
+	if p.audioCache == nil {
+		return nil, errors.New("audio cache unavailable")
+	}
+	c := p.audioCache
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		return nil, err
+	}
+	songs := make([]CachedSong, 0, len(entries))
+	for _, entry := range entries {
+		id := strings.TrimSuffix(entry.Name(), ".wwaudio")
+		if id == entry.Name() || !videoID.MatchString(id) || entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || !info.Mode().IsRegular() || info.Size() <= audioCacheHeader {
+			continue
+		}
+		songs = append(songs, CachedSong{ID: id, Size: info.Size()})
+	}
+	sort.Slice(songs, func(i, j int) bool { return songs[i].ID < songs[j].ID })
+	return songs, nil
 }
 
 type audioCache struct {
@@ -124,7 +215,7 @@ func (c *audioCache) put(id string, data []byte, bitrate int, duration time.Dura
 	var total int64
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".wwaudio") || !videoID.MatchString(strings.TrimSuffix(name, ".wwaudio")) {
+		if entry.IsDir() || !(strings.HasSuffix(name, ".wwchunk") || (strings.HasSuffix(name, ".wwaudio") && videoID.MatchString(strings.TrimSuffix(name, ".wwaudio")))) {
 			continue
 		}
 		info, err := entry.Info()

@@ -143,6 +143,12 @@ func (p *Playback) load(id string, position float64, start bool) error {
 	if !local && p.audioCache != nil && videoID.MatchString(id) {
 		var err error
 		cached, err = p.audioCache.get(id)
+		if cached == nil && err == nil && originalID != id && videoID.MatchString(originalID) {
+			cached, err = p.audioCache.get(originalID)
+			if cached != nil {
+				id = originalID
+			}
+		}
 		if err != nil {
 			log.Printf("read audio cache for %s: %v", id, err)
 			if removeErr := p.audioCache.remove(id); removeErr != nil {
