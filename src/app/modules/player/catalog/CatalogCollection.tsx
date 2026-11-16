@@ -65,7 +65,7 @@ export function CatalogCollection({ kind, id, onBack, onPlay, onArtist, current 
       </div>
     </header>
     <section className="artist-catalog" aria-label={`${kind === "album" ? "Album" : "Playlist"} songs`}>
-      {kind === "playlist" && <label className="collection-search-label catalog-playlist-search"><Search className="search-icon" size={16} /><input className="player-search-input" type="search" aria-label={searchLabel} placeholder={searchLabel} value={query} onChange={(event) => setQuery(event.target.value)} /></label>}
+      <label className="collection-search-label catalog-playlist-search"><Search className="search-icon" size={16} /><input className="player-search-input" type="search" aria-label={searchLabel} placeholder={searchLabel} value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       <div className="album-columns"><span>#</span><span>Title</span><span className="album-duration-heading"><Clock3 size={16} aria-label="Duration" /></span></div>
       {loadError ? <><PlayerAlert message={loadError} onDismiss={() => {}} />{onRetry && <button type="button" className="artist-secondary" onClick={onRetry}>try again</button>}</> : loading ? <p className="feed-message loading-state" role="status"><Classic />finding your next favorites...</p> : visibleTracks.length ? visibleTracks.map((track, index) => <div className="catalog-song" key={track.id} onContextMenu={(event) => openSongMenu(event, { ...track, album_id: track.album_id || (kind === "album" ? id : "") }, onCollectionMenu ? { kind: "playlist", id } : undefined)} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, .artist-links")) return; play(track); }}>
         <span className="catalog-song-number">{index + 1}</span>

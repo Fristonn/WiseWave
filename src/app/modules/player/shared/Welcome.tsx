@@ -197,7 +197,6 @@ export function Welcome({ close }: { close: () => void }) {
     <div className={`welcome-overlay ${closing ? "welcome-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
       <div className="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title" tabIndex={-1} ref={dialog}>
         <header className="welcome-intro">
-          <div className="welcome-cover" aria-hidden="true"><img src={welcomeProfile} alt="" /></div>
           <div className="welcome-who">
             <img className="welcome-pfp" src={welcomeProfile} alt="" />
             <div className="welcome-who-copy">

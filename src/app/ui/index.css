@@ -6650,8 +6650,8 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px 4px;
-  font-size: 12px;
+  padding: 6px 2px 4px 10px;
+  font-size: 13px;
   font-weight: 600;
   color: #a4a4a4;
 }
@@ -6667,18 +6667,18 @@ kbd {
   background: transparent;
   border: 0;
   color: #b3b3b3;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 0;
   border-radius: 4px;
-  transition: background-color 150ms, color 150ms;
+  transition: color 150ms;
 }
 
 .search-dropdown-clear:hover,
 .search-dropdown-clear:focus-visible {
   color: #fff;
-  background: #ffffff12;
+  background: transparent;
 }
 
 .search-history > [role="listbox"] {
@@ -6691,7 +6691,7 @@ kbd {
 
 .search-history-row {
   display: flex;
-  min-height: 44px;
+  min-height: 47px;
   align-items: center;
   margin-top: 2px;
   border-radius: 6px;
@@ -6716,7 +6716,7 @@ kbd {
   color: #fffc;
   background: transparent;
   text-align: left;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
 }
 
@@ -6729,6 +6729,11 @@ kbd {
   color: #a4a4a4b3;
 }
 
+.search-history-icon svg, .search-history-delete svg {
+  width: 18px;
+  height: 18px;
+}
+
 .search-history-select > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6739,7 +6744,7 @@ kbd {
   width: 32px;
   height: 32px;
   margin-right: 4px;
-  color: #f3727a;
+  color: #fff;
 }
 
 .search-history-delete:hover, .search-history-delete:focus-visible {
@@ -6998,8 +7003,8 @@ kbd {
   display: flex;
   flex-direction: column;
   width: min(520px, 100%);
-  max-height: min(calc(100vh - var(--welcome-gap-y)), 620px);
-  max-height: min(calc(100dvh - var(--welcome-gap-y)), 620px);
+  max-height: min(calc(100vh - var(--welcome-gap-y)), 560px);
+  max-height: min(calc(100dvh - var(--welcome-gap-y)), 560px);
   overflow: hidden;
   padding: 0;
   border: 1px solid #ffffff14;
@@ -7040,35 +7045,12 @@ kbd {
   flex: none;
 }
 
-.welcome-cover {
-  position: relative;
-  height: clamp(76px, 16svh, 112px);
-  overflow: hidden;
-}
-
-.welcome-cover img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 28%;
-  filter: grayscale(1) blur(20px);
-  transform: scale(1.3);
-}
-
-.welcome-cover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, #1a1a1a00 15%, #1a1a1abf 72%, #1a1a1a);
-}
-
 .welcome-who {
   position: relative;
   display: flex;
   align-items: flex-end;
   gap: 16px;
-  margin-top: calc(var(--welcome-pfp) * -0.48);
+  margin-top: 20px;
   padding: 0 22px;
 }
 
@@ -7370,9 +7352,6 @@ kbd {
 }
 
 @media (max-height: 520px) {
-  .welcome-cover {
-    height: 64px;
-  }
   .welcome-note {
     margin-top: 10px;
     padding-bottom: 10px;
@@ -8146,7 +8125,7 @@ span.tooltip-trigger.mini-close-wrap {
   overflow: hidden;
 }
 
-.playlist-cover img, .playlist-custom-cover {
+.playlist-cover > .artwork, .playlist-cover img, .playlist-custom-cover {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -10617,11 +10596,11 @@ span.tooltip-trigger.mini-close-wrap {
 .catalog-collection .artist-hero-actions { flex-wrap: nowrap; }
 .catalog-collection .artist-hero-actions > button { min-width: 0; padding: 0 20px; }
 .catalog-collection .artist-hero-actions > .catalog-collection-options { flex: none; width: 40px; min-width: 40px; padding: 0; background: transparent; }
-.catalog-collection-playlist .album-hero { align-items: center; padding-bottom: 24px; }
-.catalog-collection-playlist .album-cover { width: clamp(144px, 16vw, 192px); }
-.catalog-collection-playlist .artist-hero-actions { margin-top: 20px; }
-.catalog-collection-playlist .album-byline { margin-top: 12px; }
-.catalog-collection-playlist .album-description { margin-top: 10px; font-size: 13px; }
+.catalog-collection .album-hero { align-items: center; padding-bottom: 24px; }
+.catalog-collection .album-cover { width: clamp(144px, 16vw, 192px); }
+.catalog-collection .artist-hero-actions { margin-top: 20px; }
+.catalog-collection .album-byline { margin-top: 12px; }
+.catalog-collection .album-description { margin-top: 10px; font-size: 13px; }
 
 .album-columns {
   display: flex;
