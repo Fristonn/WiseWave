@@ -31,6 +31,15 @@ function SnackbarToast({ item, remove }: { item: SnackbarItem; remove: (slot: st
   const timer = useRef<number | null>(null);
   const startX = useRef<number | null>(null);
   const dismissing = useRef(false);
+  useLayoutEffect(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    dismissing.current = false;
+    startX.current = null;
+    setLeaving(false);
+    setOffset(0);
+    setDragging(false);
+  }, [item.id]);
   const dismiss = useCallback(() => {
     if (dismissing.current) return;
     dismissing.current = true; setLeaving(true);
@@ -62,7 +71,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   const show = useCallback((spec: SnackbarSpec) => {
     const slot = spec.key || "notification";
     const previous = current.current.get(slot);
-    const next = { ...spec, text: feedbackText(spec.text, spec.preservePunctuation), progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: spec.key && previous ? previous.id : ++nextId.current };
+    const next = { ...spec, text: feedbackText(spec.text, spec.preservePunctuation), progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: ++nextId.current };
     current.current.set(slot, next);
     setItems(Array.from(current.current.values()));
     if (!spec.key) previous?.onDismiss?.();
@@ -72,7 +81,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
     if (target?.id !== id) return;
     current.current.delete(slot); setItems(Array.from(current.current.values())); target.onDismiss?.();
   }, []);
-  return <SnackbarContext.Provider value={show}>{children}{createPortal(<div className="snackbar-host">{items.map((item) => <SnackbarToast key={item.id} item={item} remove={remove} />)}</div>, document.body)}</SnackbarContext.Provider>;
+  return <SnackbarContext.Provider value={show}>{children}{createPortal(<div className="snackbar-host">{items.map((item) => <SnackbarToast key={item.slot} item={item} remove={remove} />)}</div>, document.body)}</SnackbarContext.Provider>;
 }
 
 export function useSnackbar() {

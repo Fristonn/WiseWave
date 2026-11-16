@@ -14,4 +14,14 @@ Separated the migration-write failure from library parsing. Valid songs remain a
 
 Verification: reproduced zero liked songs and playlists before the fix using a throwing storage writer. Source-level regression probes now preserve the song, playlist, and original storage, report the failure, persist a successful migration once, and retain the malformed-JSON fallback. `npm run typecheck` passed.
 
+Commit `392f71c` was pushed to `origin/maintenance/stability-fixes`.
+
+## Preserve replacement snackbars during dismissal
+
+Confirmed that a keyed progress message reused the previous notification ID while its exit timer remained active. Updating that notification during dismissal left the replacement invisible and then removed it.
+
+Each update now receives a new notification ID while React keeps a stable slot identity. Replacement updates reset dismissal and drag state and cancel the old exit timer. The provider's ID check prevents stale removal callbacks from deleting newer messages.
+
+Verification: a temporary DOM harness using the actual React components reproduced the replacement entering the leaving state and disappearing after 200 ms. After the fix the replacement remains visible, removal of another slot preserves its neighbor, and ordinary notifications still dismiss after six seconds plus the exit animation. `npm run typecheck` passed. The harness dependency was installed only under the OS temporary directory; repository dependencies are unchanged.
+
 Commit and push status will be recorded at the next checkpoint.
