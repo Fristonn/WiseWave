@@ -71,14 +71,20 @@ function normalizeData(data: Data): { data: Data; changed: boolean } {
   return { data: { liked, playlists }, changed };
 }
 
-function read(): Data {
+function read(onError?: (message: string) => void): Data {
   try {
     const raw = JSON.parse(localStorage.getItem(key) || "{}");
     const { data, changed } = normalizeData({
       liked: Array.isArray(raw.liked) ? raw.liked : [],
       playlists: Array.isArray(raw.playlists) ? raw.playlists : [],
     });
-    if (changed) localStorage.setItem(key, JSON.stringify(data));
+    if (changed) {
+      try {
+        localStorage.setItem(key, JSON.stringify(data));
+      } catch {
+        onError?.("couldn't update your saved song details");
+      }
+    }
     return data;
   } catch {
     return { liked: [], playlists: [] };
@@ -86,8 +92,9 @@ function read(): Data {
 }
 
 export function useLibrary() {
-  const [data, setData] = useState(read);
-  const [error, setError] = useState("");
+  const loadError = useRef("");
+  const [data, setData] = useState(() => read((message) => { loadError.current = message; }));
+  const [error, setError] = useState(loadError.current);
   const durationSyncRequested = useRef(new Set<string>());
   const update = (change: (current: Data) => Data) => setData((current) => {
     const next = change(current);
@@ -215,7 +222,7 @@ export function useLibrary() {
           ? current.playlists.map((item) => (item.id === id ? playlist : item))
           : [playlist, ...current.playlists],
       };
-    })(read());
+    })(read(setError));
     try {
       localStorage.setItem(key, JSON.stringify(next));
       setData(next); setError("");
