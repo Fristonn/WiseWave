@@ -252,7 +252,7 @@ func (client *MusicClient) GetPlaylistTracks(ctx context.Context, playlistID str
 			if artwork == "" {
 				artwork = "https://i.ytimg.com/vi/" + item.VideoID + "/hqdefault.jpg"
 			}
-			tracks = append(tracks, models.Track{ID: item.VideoID, Title: item.Title, Artist: artist, ArtistID: item.ArtistID(), Album: item.Album, AlbumID: item.AlbumID, Duration: item.Duration, DurationSeconds: seconds, AlbumArtURL: UpgradeArtworkURL(artwork)})
+			tracks = append(tracks, models.Track{IsExplicit: item.IsExplicit, ID: item.VideoID, Title: item.Title, Artist: artist, ArtistID: item.ArtistID(), Album: item.Album, AlbumID: item.AlbumID, Duration: item.Duration, DurationSeconds: seconds, AlbumArtURL: UpgradeArtworkURL(artwork)})
 		}
 	}
 	queue := make([]string, 0, 1)

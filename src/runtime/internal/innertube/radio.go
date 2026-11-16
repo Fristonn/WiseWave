@@ -115,7 +115,7 @@ func (client *Client) RelatedMulti(videoIDs []string) ([]models.Track, error) {
 					}
 					duration := text("lengthText")
 					metadata := parseByline(item["longBylineText"])
-					tracks = append(tracks, models.Track{
+					tracks = append(tracks, models.Track{IsExplicit: rendererIsExplicit(item),
 						ID:              id,
 						Title:           title,
 						Artist:          metadata.artist,

@@ -236,6 +236,7 @@ func extractTrackFromRenderer(renderer map[string]interface{}) *models.Track {
 	}
 
 	return &models.Track{
+		IsExplicit:      rendererIsExplicit(renderer),
 		ID:              videoID,
 		Title:           title,
 		Artist:          metadata.artist,

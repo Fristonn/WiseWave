@@ -107,6 +107,7 @@ func isBrowsablePlaylist(id string) bool {
 }
 
 type MusicItem struct {
+	IsExplicit    bool     `json:"isExplicit,omitempty"`
 	ID            string   `json:"id,omitempty"`
 	VideoID       string   `json:"videoId,omitempty"`
 	BrowseID      string   `json:"browseId,omitempty"`

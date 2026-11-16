@@ -64,7 +64,7 @@ func rankSearchItemsWithRanker(query string, result *SearchResult, ranker search
 			if artist == "" {
 				artist = item.Artist
 			}
-			tracks = append(tracks, models.Track{ID: item.VideoID, Title: item.Title, Artist: artist, Album: item.Album, Duration: item.Duration, DurationSeconds: parseDurationSeconds(item.Duration)})
+			tracks = append(tracks, models.Track{IsExplicit: item.IsExplicit, ID: item.VideoID, Title: item.Title, Artist: artist, Album: item.Album, Duration: item.Duration, DurationSeconds: parseDurationSeconds(item.Duration)})
 			if _, ok := items[item.VideoID]; !ok {
 				items[item.VideoID] = item
 			}

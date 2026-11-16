@@ -13,6 +13,7 @@ type Track struct {
 	StreamURL       string `json:"stream_url"`
 	FilePath        string `json:"-"`
 	IsFavorite      bool   `json:"is_favorite"`
+	IsExplicit      bool   `json:"is_explicit,omitempty"`
 }
 
 type Album struct {

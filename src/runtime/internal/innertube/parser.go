@@ -134,7 +134,7 @@ type itemIdentity struct {
 }
 
 func parseMusicCardShelf(renderer *jsonObject) (MusicItem, bool) {
-	item := MusicItem{Kind: KindMusicItem}
+	item := MusicItem{Kind: KindMusicItem, IsExplicit: rendererIsExplicit(renderer)}
 	item.Title = rendererText(renderer.get("title"))
 	if item.Title == "" {
 		return MusicItem{}, false
@@ -227,7 +227,7 @@ func rendererKind(key string) (ItemKind, bool) {
 }
 
 func parseMusicItem(kind ItemKind, renderer *jsonObject) MusicItem {
-	item := MusicItem{Kind: kind}
+	item := MusicItem{Kind: kind, IsExplicit: rendererIsExplicit(renderer)}
 	item.Title = rendererText(renderer.get("title"))
 	if item.Title == "" {
 		item.Title = rendererText(renderer.get("headline"))
