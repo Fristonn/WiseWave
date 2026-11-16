@@ -1,6 +1,6 @@
 import { Music, type CatalogAlbum, type CatalogArtist, type CatalogPlaylist, type Track } from "../../../mygo";
 
-const TTL_MS = 45 * 60 * 1000;
+const TTL_MS = 5 * 60 * 1000;
 const MAX_ENTRIES = 64;
 
 type Timed<T> = { value: T; expires: number };

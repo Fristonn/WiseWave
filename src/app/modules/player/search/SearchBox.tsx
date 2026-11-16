@@ -1,7 +1,9 @@
+import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { useEffect, useRef, useState } from "react";
 import { History, Play, Search, X } from "lucide-react";
 import { Music, type CatalogAlbum, type CatalogArtist, type CatalogPlaylist, type Track } from "../../../mygo";
 import { Artwork } from "../../../shared/ui/Artwork";
+import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import { useSongMenu } from "../shared/SongMenu";
 import { ArtistLinks } from "../shared/ArtistLinks";
 import { PlayerAlert } from "../shared/PlayerAlert";
@@ -378,7 +380,7 @@ export function SearchBox({
                       <span className="search-history-icon">
                         <History size={17} />
                       </span>
-                      <span>{item}</span>
+                      <MarqueeText>{item}</MarqueeText>
                     </button>
                     <button
                       type="button"
@@ -421,7 +423,7 @@ export function SearchBox({
                       <span className="search-history-icon">
                         <Search size={17} />
                       </span>
-                      <span>{item}</span>
+                      <MarqueeText>{item}</MarqueeText>
                     </button>
                   </div>
                 ))}
@@ -441,8 +443,8 @@ export function SearchBox({
                       <div role="button" tabIndex={0} aria-label={`Play ${track.title}`} className="search-result-select" onPointerDown={(event) => event.preventDefault()} onClick={() => { save(draft); onSelect(track, preview); setOpen(false); setSelected(-1); }} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); save(draft); onSelect(track, preview); setOpen(false); setSelected(-1); } }}>
                         <span className="search-result-cover"><Artwork src={track.album_art_url} size={48} /><span className="quick-pick-play-overlay" aria-hidden="true"><Play size={16} fill="currentColor" /></span></span>
                         <span className="search-result-info">
-                          <strong className="song-menu-title" onContextMenu={(event) => openSongMenu(event, track)}>{track.title}</strong>
-                          <span className="search-result-artist"><ArtistLinks track={track} onOpen={(artist) => { onArtist?.({ artist: artist.artist, artist_id: artist.artist_id }); setOpen(false); setSelected(-1); }} /></span>
+                          <strong className="song-menu-title" onContextMenu={(event) => openSongMenu(event, track)}><span className="explicit-title"><ExplicitBadge explicit={track.is_explicit} /><MarqueeText>{track.title}</MarqueeText></span></strong>
+                          <span className="search-result-artist"><MarqueeText><ArtistLinks track={track} onOpen={(artist) => { onArtist?.({ artist: artist.artist, artist_id: artist.artist_id }); setOpen(false); setSelected(-1); }} /></MarqueeText></span>
                         </span>
                       </div>
                     </div>
@@ -454,7 +456,7 @@ export function SearchBox({
                   return <div className={`search-result search-artist ${activeIndex === optionIndex ? "selected" : ""}`} key={artist.id} id={`search-option-${optionIndex}`} data-search-index={optionIndex} role="option" aria-selected={activeIndex === optionIndex} onPointerMove={() => setSelected(optionIndex)}>
                     <button type="button" className="search-result-select" onPointerDown={(event) => event.preventDefault()} onClick={() => { onArtist?.({ artist: artist.name, artist_id: artist.id }); setOpen(false); setSelected(-1); }}>
                       <span className="search-artist-cover"><Artwork src={artist.artwork_url} size={48} placeholder="user" allowNonSquare /></span>
-                      <span className="search-result-info"><strong>{artist.name}</strong><small>Artist</small></span>
+                      <span className="search-result-info"><strong><MarqueeText>{artist.name}</MarqueeText></strong><small>Artist</small></span>
                     </button>
                   </div>;
                 })}
@@ -463,7 +465,7 @@ export function SearchBox({
                   const optionIndex = suggestionItems.length + previewItems.length + artistItems.length + index;
                   return <div className={`search-result ${activeIndex === optionIndex ? "selected" : ""}`} key={item.id} id={`search-option-${optionIndex}`} data-search-index={optionIndex} role="option" aria-selected={activeIndex === optionIndex} onPointerMove={() => setSelected(optionIndex)}>
                     <button type="button" className="search-result-select" onPointerDown={(event) => event.preventDefault()} onClick={() => { onPlaylist?.(item.id); setOpen(false); setSelected(-1); }}>
-                      <span className="search-result-cover"><Artwork src={item.artwork_url} size={48} /></span><span className="search-result-info"><strong>{item.title}</strong><small>{item.author || "Playlist"}</small></span>
+                      <span className="search-result-cover"><Artwork src={item.artwork_url} size={48} /></span><span className="search-result-info"><strong><MarqueeText>{item.title}</MarqueeText></strong><small><MarqueeText>{item.author || "Playlist"}</MarqueeText></small></span>
                     </button>
                   </div>;
                 })}
@@ -472,7 +474,7 @@ export function SearchBox({
                   const optionIndex = suggestionItems.length + previewItems.length + artistItems.length + playlistItems.length + index;
                   return <div className={`search-result ${activeIndex === optionIndex ? "selected" : ""}`} key={item.id} id={`search-option-${optionIndex}`} data-search-index={optionIndex} role="option" aria-selected={activeIndex === optionIndex} onPointerMove={() => setSelected(optionIndex)}>
                     <button type="button" className="search-result-select" onPointerDown={(event) => event.preventDefault()} onClick={() => { onAlbum?.(item.id); setOpen(false); setSelected(-1); }}>
-                      <span className="search-result-cover"><Artwork src={item.artwork_url} size={48} /></span><span className="search-result-info"><strong>{item.title}</strong><small>{item.artist || "Album"}</small></span>
+                      <span className="search-result-cover"><Artwork src={item.artwork_url} size={48} /></span><span className="search-result-info"><strong><MarqueeText>{item.title}</MarqueeText></strong><small><MarqueeText>{item.artist || "Album"}</MarqueeText></small></span>
                     </button>
                   </div>;
                 })}
