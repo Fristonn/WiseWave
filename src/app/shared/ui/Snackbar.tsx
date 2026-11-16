@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import { feedbackText } from "../feedbackText";
 
-type SnackbarSpec = { key?: string; text: string; duration?: number; progress?: number | null; progressLabel?: string; accent?: string; action?: { label: string; onClick: () => void }; onDismiss?: () => void };
+type SnackbarSpec = { preservePunctuation?: boolean; key?: string; text: string; duration?: number; loading?: boolean; progress?: number | null; progressLabel?: string; accent?: string; action?: { label: string; onClick: () => void }; onDismiss?: () => void };
 type SnackbarItem = SnackbarSpec & { id: number; slot: string };
 const SnackbarContext = createContext<((spec: SnackbarSpec) => void) | null>(null);
 
@@ -39,7 +39,7 @@ function SnackbarToast({ item, remove }: { item: SnackbarItem; remove: (slot: st
   }, [item.slot, item.id, remove]);
   useEffect(() => {
     if (item.duration === -2) return;
-    const timeout = window.setTimeout(dismiss, item.duration && item.duration > 0 ? item.duration : 2750);
+    const timeout = window.setTimeout(dismiss, item.duration && item.duration > 0 ? item.duration : 6000);
     return () => window.clearTimeout(timeout);
   }, [item.duration, item.text, dismiss]);
   useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
@@ -47,6 +47,7 @@ function SnackbarToast({ item, remove }: { item: SnackbarItem; remove: (slot: st
   return <div className="snackbar-slot" onPointerDown={(event) => { if ((event.target as Element).closest("button")) return; startX.current = event.clientX; setDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (startX.current !== null) setOffset(event.clientX - startX.current); }} onPointerUp={(event) => { if (startX.current === null) return; const moved = event.clientX - startX.current; startX.current = null; setDragging(false); if (Math.abs(moved) > event.currentTarget.offsetWidth * 0.4) dismiss(); else setOffset(0); }} onPointerCancel={() => { startX.current = null; setDragging(false); setOffset(0); }} style={{ transform: `translateX(${offset}px)`, opacity: Math.max(0, 1 - Math.abs(offset) / 320), transition: dragging ? "none" : "transform 150ms, opacity 150ms" }}>
     <div className="snackbar" data-leaving={leaving || undefined} role="status" aria-live={item.duration === -2 ? "off" : "polite"}>
       {hasProgress && <ProgressBorder value={item.progress ?? null} accent={item.accent} />}
+      {item.loading && <LoaderCircle className="snackbar-loader" size={18} aria-hidden="true" />}
       <span className="snackbar-text"><span>{item.text}</span>{hasProgress && <span className="snackbar-progress-meta" role="progressbar" aria-label={item.text} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress == null ? undefined : Math.round(item.progress * 100)} aria-valuetext={item.progressLabel}>{item.progressLabel}</span>}</span>
       {item.action && <button type="button" className="snackbar-action" onClick={() => { item.action?.onClick(); dismiss(); }}>{item.action.label}</button>}
       <button type="button" className="snackbar-close" aria-label="dismiss" onClick={dismiss}><X size={20} /></button>
@@ -61,7 +62,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   const show = useCallback((spec: SnackbarSpec) => {
     const slot = spec.key || "notification";
     const previous = current.current.get(slot);
-    const next = { ...spec, text: feedbackText(spec.text), progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: spec.key && previous ? previous.id : ++nextId.current };
+    const next = { ...spec, text: feedbackText(spec.text, spec.preservePunctuation), progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: spec.key && previous ? previous.id : ++nextId.current };
     current.current.set(slot, next);
     setItems(Array.from(current.current.values()));
     if (!spec.key) previous?.onDismiss?.();
