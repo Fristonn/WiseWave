@@ -2,7 +2,6 @@
 
 import { call, event } from "mygo-runtime";
 
-// ---- Types ----
 
 export interface AlbumDetail {
   id: string;
@@ -34,6 +33,18 @@ export interface BrowseResult {
   sections?: MusicSection[];
   continuationToken?: string;
   queuePlaylistId?: string;
+}
+
+export interface CacheClearProgress {
+  completed: number;
+  total: number;
+  deleted_id: string;
+  failed: number;
+}
+
+export interface CachedSong {
+  id: string;
+  size: number;
 }
 
 export interface CanvasResult {
@@ -84,6 +95,12 @@ export interface DiscordState {
   button_url?: string;
 }
 
+export interface DownloadProgress {
+  track_id: string;
+  received: number;
+  total: number;
+}
+
 export interface DownloadResult {
   track_id: string;
   title: string;
@@ -122,6 +139,7 @@ export interface MediaSessionState {
 }
 
 export interface MusicItem {
+  isExplicit?: boolean;
   id?: string;
   videoId?: string;
   browseId?: string;
@@ -147,6 +165,7 @@ export interface MusicSection {
 }
 
 export interface OfflineTrack {
+  is_explicit?: boolean;
   id: string;
   title: string;
   artist: string;
@@ -299,6 +318,7 @@ export interface Track {
   album_art_url: string;
   stream_url: string;
   is_favorite: boolean;
+  is_explicit?: boolean;
 }
 
 export interface TrayState {
@@ -369,7 +389,6 @@ export interface YouTubeSyncStatus {
   library: YouTubeLibrarySnapshot | null;
 }
 
-// ---- Services ----
 
 export const Music = {
   album(id: string): Promise<AlbumDetail | null> {
@@ -389,6 +408,9 @@ export const Music = {
   },
   charts(): Promise<BrowseResult | null> {
     return call("Music.Charts");
+  },
+  deleteDownload(id: string): Promise<void> {
+    return call("Music.DeleteDownload", id);
   },
   download(track: Track): Promise<DownloadResult | null> {
     return call("Music.Download", track);
@@ -420,6 +442,9 @@ export const Music = {
   resolveLink(raw: string): Promise<Track | null> {
     return call("Music.ResolveLink", raw);
   },
+  revealDownload(id: string): Promise<void> {
+    return call("Music.RevealDownload", id);
+  },
   search(query: string): Promise<Track[]> {
     return call("Music.Search", query);
   },
@@ -432,6 +457,12 @@ export const Music = {
 } as const;
 
 export const Playback = {
+  clearCachedSongs(): Promise<CacheClearProgress> {
+    return call("Playback.ClearCachedSongs");
+  },
+  listCachedSongs(): Promise<CachedSong[]> {
+    return call("Playback.ListCachedSongs");
+  },
   pause(): Promise<void> {
     return call("Playback.Pause");
   },
@@ -635,9 +666,7 @@ export const Clipboard = {
   },
 } as const;
 
-// ---- Events ----
 
-/** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   spotifyAccountChanged: event<boolean>("spotify-account-changed"),
   spotifyLibrarySyncChanged: event<SpotifySyncStatus>("spotify-library-sync-changed"),
@@ -645,6 +674,8 @@ export const events = {
   youtubeAccountChanged: event<boolean>("youtube-account-changed"),
   youtubeLibrarySyncChanged: event<YouTubeSyncStatus>("youtube-library-sync-changed"),
   youtubeImportChanged: event<YouTubeImportStatus>("youtube-import-changed"),
+  cacheClearProgressChanged: event<CacheClearProgress>("cache-clear-progress-changed"),
+  downloadProgressChanged: event<DownloadProgress>("download-progress-changed"),
   mediaAction: event<string>("media-action"),
   trayAction: event<string>("tray-action"),
   playerFullscreenChanged: event<boolean>("player-fullscreen-changed"),

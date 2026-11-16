@@ -11,6 +11,7 @@ require (
 	github.com/tphakala/go-audio-stream v0.5.0
 	github.com/tphakala/go-m4a v0.8.0
 	golang.org/x/sys v0.49.0
+	golang.org/x/text v0.43.0
 )
 
 require (
@@ -27,5 +28,4 @@ require (
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 )

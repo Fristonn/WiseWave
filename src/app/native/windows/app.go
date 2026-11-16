@@ -42,7 +42,6 @@ func Run(icon []byte) {
 	trayControl.minimizeToTray.Store(true)
 	discord := integrations.NewDiscord()
 	mediaSession := integrations.NewMediaSession(playback)
-
 	spotifyAccount := spotifyaccount.NewSpotifyAccount()
 	spotifyaccount.WireSpotifySearch(spotifyAccount, music.Search)
 	spotifyLogin := spotify.NewSpotifyLogin(spotifyAccount)
