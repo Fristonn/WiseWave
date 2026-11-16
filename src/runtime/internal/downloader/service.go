@@ -36,6 +36,7 @@ type DownloadResult struct {
 }
 
 type OfflineTrack struct {
+	IsExplicit      bool   `json:"is_explicit,omitempty"`
 	ID              string `json:"id"`
 	Title           string `json:"title"`
 	Artist          string `json:"artist"`
@@ -66,6 +67,26 @@ type Service struct {
 	trackLocks     sync.Map
 	streamResolver func(string, string, string) (string, error)
 	streamOpener   func(string) (*http.Response, error)
+	perSongFolders bool
+	onProgress     func(string, int64, int64)
+}
+
+type progressWriter struct {
+	writer  io.Writer
+	written int64
+	total   int64
+	last    time.Time
+	report  func(int64, int64)
+}
+
+func (w *progressWriter) Write(data []byte) (int, error) {
+	n, err := w.writer.Write(data)
+	w.written += int64(n)
+	if time.Since(w.last) >= 150*time.Millisecond {
+		w.report(w.written, w.total)
+		w.last = time.Now()
+	}
+	return n, err
 }
 
 func NewService(
@@ -241,6 +262,26 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 	cleanTitle := sanitizeFileName(title)
 	cleanID := sanitizeFileName(trackID)
 	baseName := fmt.Sprintf("%s - %s [%s]", cleanArtist, cleanTitle, cleanID)
+	targetDir := s.offlineDir
+	if s.perSongFolders {
+		baseName = strings.TrimRight(fmt.Sprintf("%s - %s", cleanTitle, cleanArtist), ". ")
+		if len([]rune(baseName)) > 120 {
+			baseName = strings.TrimRight(string([]rune(baseName)[:120]), ". ")
+		}
+		for number := 1; ; number++ {
+			folder := baseName
+			if number > 1 {
+				folder = fmt.Sprintf("%s (%d)", baseName, number)
+			}
+			targetDir = filepath.Join(s.offlineDir, folder)
+			if err := os.Mkdir(targetDir, 0755); err == nil {
+				break
+			} else if !os.IsExist(err) {
+				return nil, fmt.Errorf("cannot create song directory: %w", err)
+			}
+		}
+		defer os.Remove(targetDir)
+	}
 
 	req, err := http.NewRequest("GET", streamURL, nil)
 	if err != nil {
@@ -270,8 +311,8 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 	ext := detectAudioExtension(resp.Header.Get("Content-Type"), leadingBytes)
 
 	audioFileName := baseName + ext
-	audioFilePath := filepath.Join(s.offlineDir, audioFileName)
-	tempAudioFilePath := filepath.Join(s.offlineDir, fmt.Sprintf(".tmp_%s_%d%s", cleanID, time.Now().UnixNano(), ext))
+	audioFilePath := filepath.Join(targetDir, audioFileName)
+	tempAudioFilePath := filepath.Join(targetDir, fmt.Sprintf(".tmp_%s_%d%s", cleanID, time.Now().UnixNano(), ext))
 
 	outFile, err := os.Create(tempAudioFilePath)
 	if err != nil {
@@ -279,8 +320,19 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 	}
 
 	var copiedBytes int64
+	total := resp.ContentLength
+	if source != resp.Body || resp.StatusCode == http.StatusPartialContent {
+		total = 0
+	}
+	var output io.Writer = outFile
+	var progress *progressWriter
+	if s.onProgress != nil {
+		progress = &progressWriter{writer: outFile, total: total, report: func(done, total int64) { s.onProgress(trackID, done, total) }}
+		output = progress
+		progress.report(0, total)
+	}
 	if n > 0 {
-		written, err := outFile.Write(leadingBytes)
+		written, err := output.Write(leadingBytes)
 		if err != nil {
 			outFile.Close()
 			_ = os.Remove(tempAudioFilePath)
@@ -289,13 +341,16 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 		copiedBytes += int64(written)
 	}
 
-	restCopied, err := io.Copy(outFile, source)
+	restCopied, err := io.Copy(output, source)
 	outFile.Close()
 	if err != nil {
 		_ = os.Remove(tempAudioFilePath)
 		return nil, fmt.Errorf("audio download interrupted: %w", err)
 	}
 	copiedBytes += restCopied
+	if progress != nil && err == nil {
+		progress.report(progress.written, progress.total)
+	}
 	if resp.ContentLength > 0 && copiedBytes != resp.ContentLength && source == resp.Body {
 		_ = os.Remove(tempAudioFilePath)
 		return nil, fmt.Errorf("audio download is incomplete")
@@ -340,8 +395,8 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 
 		if strings.TrimSpace(lrcContent) != "" {
 			lrcFileName := baseName + ".lrc"
-			lrcFilePath := filepath.Join(s.offlineDir, lrcFileName)
-			tempLrcPath := filepath.Join(s.offlineDir, fmt.Sprintf(".tmp_%s_%d.lrc", cleanID, time.Now().UnixNano()))
+			lrcFilePath := filepath.Join(targetDir, lrcFileName)
+			tempLrcPath := filepath.Join(targetDir, fmt.Sprintf(".tmp_%s_%d.lrc", cleanID, time.Now().UnixNano()))
 			if errW := os.WriteFile(tempLrcPath, []byte(lrcContent), 0644); errW == nil {
 				if errRen := os.Rename(tempLrcPath, lrcFilePath); errRen == nil {
 					result.LyricsFilePath = lrcFilePath
@@ -356,8 +411,8 @@ func (s *Service) DownloadTrack(trackID, title, artist, album string, durationSe
 			ttmlContent := lyrics.GenerateTtml(title, artist, doc.Lines)
 			if strings.TrimSpace(ttmlContent) != "" {
 				ttmlFileName := baseName + ".ttml"
-				ttmlFilePath := filepath.Join(s.offlineDir, ttmlFileName)
-				tempTtmlPath := filepath.Join(s.offlineDir, fmt.Sprintf(".tmp_%s_%d.ttml", cleanID, time.Now().UnixNano()))
+				ttmlFilePath := filepath.Join(targetDir, ttmlFileName)
+				tempTtmlPath := filepath.Join(targetDir, fmt.Sprintf(".tmp_%s_%d.ttml", cleanID, time.Now().UnixNano()))
 				if errT := os.WriteFile(tempTtmlPath, []byte(ttmlContent), 0644); errT == nil {
 					if errRen := os.Rename(tempTtmlPath, ttmlFilePath); errRen == nil {
 						result.TtmlFilePath = ttmlFilePath
@@ -400,7 +455,27 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 
 	idExtractRegex := regexp.MustCompile(`\[([A-Za-z0-9_-]+)\]$`)
 
+	type offlineEntry struct {
+		directory string
+		entry     os.DirEntry
+	}
+	var files []offlineEntry
 	for _, entry := range entries {
+		if entry.IsDir() && s.perSongFolders {
+			directory := filepath.Join(s.offlineDir, entry.Name())
+			children, err := os.ReadDir(directory)
+			if err != nil {
+				return nil, err
+			}
+			for _, child := range children {
+				files = append(files, offlineEntry{directory, child})
+			}
+		} else {
+			files = append(files, offlineEntry{s.offlineDir, entry})
+		}
+	}
+	for _, item := range files {
+		entry, directory := item.entry, item.directory
 		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".tmp_") {
 			continue
 		}
@@ -410,7 +485,7 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 		}
 
 		baseName := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-		fullAudioPath := filepath.Join(s.offlineDir, entry.Name())
+		fullAudioPath := filepath.Join(directory, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -434,7 +509,7 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 			title = strings.TrimSpace(parts[1])
 		}
 
-		lrcPath := filepath.Join(s.offlineDir, baseName+".lrc")
+		lrcPath := filepath.Join(directory, baseName+".lrc")
 		hasLyrics := false
 		if _, err := os.Stat(lrcPath); err == nil {
 			hasLyrics = true
@@ -442,7 +517,7 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 			lrcPath = ""
 		}
 
-		ttmlPath := filepath.Join(s.offlineDir, baseName+".ttml")
+		ttmlPath := filepath.Join(directory, baseName+".ttml")
 		hasTtml := false
 		if _, err := os.Stat(ttmlPath); err == nil {
 			hasTtml = true
@@ -474,6 +549,7 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 				track.Duration = metadata.Duration
 				track.DurationSeconds = metadata.DurationSeconds
 				track.AlbumArtURL = metadata.AlbumArtURL
+				track.IsExplicit = metadata.IsExplicit
 			}
 		}
 		tracks = append(tracks, track)
@@ -484,6 +560,48 @@ func (s *Service) ListOfflineTracks() ([]OfflineTrack, error) {
 
 func (s *Service) SetStreamResolver(resolve func(string, string, string) (string, error)) {
 	s.streamResolver = resolve
+}
+
+func (s *Service) SetPerSongFolders(enabled bool) { s.perSongFolders = enabled }
+
+func (s *Service) SetProgressCallback(callback func(string, int64, int64)) { s.onProgress = callback }
+
+func (s *Service) DeleteOfflineTrack(id string) error {
+	unlock := s.lockTrack(id)
+	defer unlock()
+	tracks, err := s.ListOfflineTracks()
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, track := range tracks {
+		if track.ID != id {
+			continue
+		}
+		found = true
+		name := track.AudioFileName
+		if name == "" || filepath.Base(name) != name || strings.ContainsAny(name, `/\:`) {
+			return fmt.Errorf("invalid downloaded file name")
+		}
+		base := strings.TrimSuffix(name, filepath.Ext(name))
+		directory := filepath.Dir(track.AudioFilePath)
+		relative, err := filepath.Rel(s.offlineDir, directory)
+		if err != nil || (relative != "." && (filepath.Base(relative) != relative || strings.ContainsAny(relative, `/\:`) || relative == "..")) {
+			return fmt.Errorf("invalid downloaded file directory")
+		}
+		for _, file := range []string{name, name + ".json", base + ".lrc", base + ".ttml"} {
+			if err := os.Remove(filepath.Join(directory, file)); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove downloaded file: %w", err)
+			}
+		}
+		if relative != "." {
+			_ = os.Remove(directory)
+		}
+	}
+	if !found {
+		return fmt.Errorf("downloaded track not found")
+	}
+	return nil
 }
 
 func (s *Service) SetStreamOpener(open func(string) (*http.Response, error)) {
@@ -501,7 +619,7 @@ func (s *Service) DownloadWithMetadata(track models.Track) (*DownloadResult, err
 		return nil, err
 	}
 	metadataPath := result.AudioFilePath + ".json"
-	temporary, err := os.CreateTemp(s.offlineDir, ".tmp_metadata_*")
+	temporary, err := os.CreateTemp(filepath.Dir(result.AudioFilePath), ".tmp_metadata_*")
 	if err != nil {
 		return nil, err
 	}
