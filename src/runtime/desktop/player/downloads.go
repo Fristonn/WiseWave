@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,14 @@ import (
 	"wisewave-runtime/internal/downloader"
 	"wisewave-runtime/internal/models"
 )
+
+type DownloadProgress struct {
+	TrackID  string `json:"track_id"`
+	Received int64  `json:"received"`
+	Total    int64  `json:"total"`
+}
+
+var DownloadProgressChanged = mygo.NewEvent[DownloadProgress]("download-progress-changed")
 
 func (m *Music) downloadService() (*downloader.Service, error) {
 	m.downloadsOnce.Do(func() {
@@ -34,6 +43,10 @@ func (m *Music) downloadService() (*downloader.Service, error) {
 			return
 		}
 		m.downloads = downloader.NewService(nil, directory, m.client, m.saavn, m.gaana, m.lyrics, m.streams)
+		m.downloads.SetPerSongFolders(true)
+		m.downloads.SetProgressCallback(func(id string, received, total int64) {
+			_ = DownloadProgressChanged.Broadcast(DownloadProgress{TrackID: id, Received: received, Total: total})
+		})
 		m.downloads.SetStreamResolver(func(id, title, artist string) (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 			defer cancel()
@@ -91,9 +104,10 @@ func (p *Playback) downloadedAudio(cancel context.CancelFunc, id string) (audio.
 	if path == "" {
 		return nil, nil, 0, nil
 	}
-	file, err := os.Open(path)
+	file, err := openDownloadedAudio(path)
 	if err != nil {
-		return nil, nil, 0, errors.New("Saved audio could not be opened")
+		log.Printf("open downloaded audio for %s: %v", id, err)
+		return nil, nil, 0, nil
 	}
 	info, err := file.Stat()
 	if err != nil || info.Size() <= 0 {
@@ -156,4 +170,40 @@ func (m *Music) ListDownloads() ([]downloader.OfflineTrack, error) {
 		return tracks[i].ModifiedAt > tracks[j].ModifiedAt
 	})
 	return tracks, nil
+}
+
+func (m *Music) DeleteDownload(id string) error {
+	if !validTrackID(id) {
+		return errors.New("invalid track")
+	}
+	service, err := m.downloadService()
+	if err != nil {
+		return err
+	}
+	if err := service.DeleteOfflineTrack(id); err != nil {
+		return errors.New("couldn't delete this download. try again")
+	}
+	return nil
+}
+
+func (m *Music) RevealDownload(id string) error {
+	if !validTrackID(id) {
+		return errors.New("invalid track")
+	}
+	tracks, err := m.ListDownloads()
+	if err != nil {
+		return err
+	}
+	for _, track := range tracks {
+		if track.ID != id {
+			continue
+		}
+		info, err := os.Lstat(track.AudioFilePath)
+		if err != nil || !info.Mode().IsRegular() {
+			return errors.New("downloaded file is unavailable")
+		}
+		mygo.Shell.ShowItemInFolder(track.AudioFilePath)
+		return nil
+	}
+	return errors.New("downloaded file is unavailable")
 }
