@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LyricCredit } from "./LyricCredit";
+import { PlayerAlert } from "../shared/PlayerAlert";
 import type { Record as LyricsRecord } from "../../../mygo";
 import { AudioLines } from "lucide-react";
 import type { LyricLine, LyricsType, Track } from "../../../types/lyricRenderer";
@@ -319,8 +320,9 @@ export default function NativeLyricsRenderer({
       <div className="native-lyrics-host" ref={hostRef} />
       {failed && (
         <div className="native-lyrics-error">
+          <PlayerAlert message="couldn't load the lyrics. try again" onDismiss={() => {}} />
           <button type="button" onClick={() => setRetry((value) => value + 1)}>
-            couldn't load the lyrics. try again
+            try again
           </button>
         </div>
       )}

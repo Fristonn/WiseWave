@@ -3,6 +3,7 @@ package lyrics
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -71,12 +72,12 @@ func (s *Service) FetchLyricsForTrack(meta TrackMeta, refresh ...bool) (*Record,
 	force := len(refresh) > 0 && refresh[0]
 	s.cacheLock.Lock()
 	if !force {
-		if cached, ok := s.cache[key]; ok && time.Now().Before(cached.expiresAt) {
+		if cached, ok := s.cache[key]; ok && time.Now().Before(cached.expiresAt) && lyricsDurationMatches(meta, cached.record.Duration) {
 			record := cloneRecord(cached.record)
 			s.cacheLock.Unlock()
 			return record, nil
 		}
-		if record := s.disk.get(key); record != nil {
+		if record := s.disk.get(key); record != nil && lyricsDurationMatches(meta, record.Duration) {
 			if s.cache == nil {
 				s.cache = make(map[string]cachedRecord)
 			}
@@ -178,6 +179,8 @@ func (s *Service) collectLyrics(meta TrackMeta, key string, flight *lyricsFlight
 			doc, err := provider.Fetch(meta)
 			if err != nil {
 				doc = nil
+			} else if doc != nil && !lyricsDurationMatches(meta, doc.Duration) {
+				doc = nil
 			} else if doc != nil {
 				doc.Source = provider.Name()
 			}
@@ -257,6 +260,16 @@ func (s *Service) collectLyrics(meta TrackMeta, key string, flight *lyricsFlight
 		}
 	}
 	finish()
+}
+
+func lyricsDurationMatches(meta TrackMeta, duration float64) bool {
+	if math.IsNaN(duration) || math.IsInf(duration, 0) || duration < 0 {
+		return false
+	}
+	if duration == 0 || meta.DurationSeconds <= 0 {
+		return true
+	}
+	return math.Abs(duration-float64(meta.DurationSeconds)) <= math.Max(3, float64(meta.DurationSeconds)*.02)
 }
 
 func (s *Service) FetchDocument(meta TrackMeta) (*LyricsDocument, error) {
