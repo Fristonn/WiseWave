@@ -130,7 +130,7 @@ func (l *LrclibProvider) toDocument(res *lrclibResult) *LyricsDocument {
 			if !ok {
 				continue
 			}
-			text := strings.TrimSpace(rawLine[len(tsMatch):])
+			text := strings.TrimSpace(wordTimestampPattern.ReplaceAllString(rawLine[len(tsMatch):], ""))
 			if text == "" || text == "♪" {
 				if len(lines) > 0 && lines[len(lines)-1].EndTimeMs == 0 {
 					lines[len(lines)-1].EndTimeMs = startMs

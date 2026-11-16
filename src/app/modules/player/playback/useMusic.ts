@@ -592,6 +592,13 @@ export function useMusic() {
     } finally { if (nextPending.current === version) nextPending.current = null; }
   };
   const shuffle = () => {
+    if (queueRef.current.length > 1) {
+      const result = [...queueRef.current];
+      for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
+      queueRef.current = result;
+      setQueue(result);
+      return;
+    }
     if (collectionSequence.current) {
       const result = [...upNextRef.current];
       for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }

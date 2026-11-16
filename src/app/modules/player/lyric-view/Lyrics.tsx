@@ -68,18 +68,19 @@ export function Lyrics({
     return value.split(/\r?\n/).filter((line) => !isEmbeddedCredit(line)).join("\n").trim();
   }, [plain]);
   const lyricLines = useMemo(() => lines.filter((line) => !isEmbeddedCredit(line.text || "")), [lines]);
+  const hasTiming = lyricLines.some((line) => line.start_time_ms > 0 || line.syllables?.some((unit) => unit.start_time_ms > 0));
   const normalized = useMemo<LyricLine[]>(() => {
-    if (settings.lyr === false) {
+    if (settings.lyr === false || !hasTiming) {
       const text = plainText ? plainText.split(/\r?\n/) : lyricLines.filter((line) => !line.is_background).map((line) => line.text);
       return text.filter((line) => line?.trim()).map((text) => ({ text, startTimeMs: null }));
     }
     return lyricLines.length ? normalizeLyricLines(lyricLines) : plainText.split(/\r?\n/).filter((line) => line.trim()).map((text) => ({ text, startTimeMs: null }));
-  }, [lyricLines, plainText, settings.lyr]);
+  }, [lyricLines, plainText, settings.lyr, hasTiming]);
   const hasWords = useMemo(
     () => normalized.some((l) => l.syllables && l.syllables.length > 0),
     [normalized]
   );
-  const type: "SYLLABLE_SYNCED" | "LINE_SYNCED" | "PLAIN" = settings.lyr === false ? "PLAIN" : hasWords
+  const type: "SYLLABLE_SYNCED" | "LINE_SYNCED" | "PLAIN" = settings.lyr === false || !hasTiming ? "PLAIN" : hasWords
     ? "SYLLABLE_SYNCED"
     : lyricLines.length > 0
     ? "LINE_SYNCED"

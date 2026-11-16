@@ -26,6 +26,6 @@ export function LyricCredit({ credit }: { credit: Record }) {
     ? safeURL(credit.contributor_url, links.unison) : "";
   return <div className="lyrics-credit">
     Lyrics {credit.source === "youlyplus" || credit.source === "betterlyrics" || credit.source === "paxsenix" || credit.source === "unison" ? "via" : "from"} <a href={sourceURL} target="_blank" rel="noopener noreferrer">{source.name}</a>
-    {credit.contributor && <> {credit.source === "unison" ? "–" : "·"} {credit.source === "amll" ? "synced by" : "submitted by"} {contributorURL ? <a href={contributorURL} target="_blank" rel="noopener noreferrer">{credit.contributor}</a> : credit.contributor}</>}
+    {credit.contributor && <>{credit.source === "unison" ? <br /> : " ·"} {credit.source === "amll" ? "synced by" : "submitted by"} {contributorURL ? <a href={contributorURL} target="_blank" rel="noopener noreferrer">{credit.contributor}</a> : credit.contributor}</>}
   </div>;
 }

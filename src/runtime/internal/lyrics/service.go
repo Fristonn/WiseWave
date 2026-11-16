@@ -52,9 +52,15 @@ func cloneRecord(record *Record) *Record {
 		return nil
 	}
 	result := *record
+	result.PlainLyrics = wordTimestampPattern.ReplaceAllString(result.PlainLyrics, "")
+	result.SyncedLyrics = wordTimestampPattern.ReplaceAllString(result.SyncedLyrics, "")
 	result.Lines = append([]Line(nil), record.Lines...)
 	for i := range result.Lines {
+		result.Lines[i].Text = wordTimestampPattern.ReplaceAllString(result.Lines[i].Text, "")
 		result.Lines[i].Syllables = append([]Syllable(nil), record.Lines[i].Syllables...)
+		for j := range result.Lines[i].Syllables {
+			result.Lines[i].Syllables[j].Text = wordTimestampPattern.ReplaceAllString(result.Lines[i].Syllables[j].Text, "")
+		}
 	}
 	return &result
 }
