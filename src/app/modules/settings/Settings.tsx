@@ -49,7 +49,7 @@ function ZoomControl() {
   }, []);
   return <div className="settings-zoom">
     <div className="settings-zoom-previews" role="group" aria-label="Scale presets">
-      {[{ label: "Dense", scale: 0.9 }, { label: "Default", scale: 1 }, { label: "Spacious", scale: 1.1 }].map(({ label, scale }, index) => <button type="button" key={label} className={`settings-zoom-preview ${index === (zoom < 1 ? 0 : zoom > 1 ? 2 : 1) ? "is-active" : ""}`} aria-pressed={index === (zoom < 1 ? 0 : zoom > 1 ? 2 : 1)} onClick={() => setZoom(scale)}>
+      {[{ label: "Dense", scale: 0.7 }, { label: "Default", scale: 1 }, { label: "Spacious", scale: 1.3 }].map(({ label, scale }, index) => <button type="button" key={label} className={`settings-zoom-preview ${zoom === scale ? "is-active" : ""}`} aria-pressed={zoom === scale} onClick={() => setZoom(scale)}>
         <span className={`settings-zoom-diagram diagram-${index}`}><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></span>
         <span>{label}</span>
       </button>)}
