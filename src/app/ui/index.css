@@ -1007,18 +1007,6 @@ kbd {
   font-weight: 700;
 }
 
-.create {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #202020;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .library-tools {
   gap: 8px;
   height: 36px;
@@ -4086,8 +4074,10 @@ kbd {
   gap: 6px;
 }
 
-.library .create {
-  border-radius: 6px;
+.library-actions .surface-btn {
+  gap: 6px;
+  min-height: 0;
+  padding: 6px 12px;
 }
 
 .library-liked {
