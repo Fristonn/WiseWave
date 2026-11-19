@@ -9,6 +9,7 @@ export interface AlbumDetail {
   artist: string;
   artwork_url: string;
   year: string;
+  release_type?: string;
   description: string;
   tracks: Track[];
 }
@@ -23,6 +24,7 @@ export interface ArtistDetail {
   monthly_listeners: string;
   tracks: Track[];
   albums: CatalogAlbum[];
+  releases_incomplete?: boolean;
 }
 
 export interface BrowseResult {
@@ -57,6 +59,7 @@ export interface CatalogAlbum {
   artist: string;
   artwork_url: string;
   year: string;
+  release_type?: string;
 }
 
 export interface CatalogArtist {

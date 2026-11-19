@@ -36,8 +36,10 @@ export function loadArtist(id: string, name: string): Promise<ArtistDetail> {
     if (!artistId) throw new Error("Artist not found.");
     const result = await Music.artist(artistId);
     if (!result) throw new Error("couldn't load this artist");
-    if (artistCache.size >= 24) artistCache.delete(artistCache.keys().next().value!);
-    artistCache.set(key, { value: result, expires: Date.now() + 10 * 60_000 });
+    if (!result.releases_incomplete) {
+      if (artistCache.size >= 24) artistCache.delete(artistCache.keys().next().value!);
+      artistCache.set(key, { value: result, expires: Date.now() + 10 * 60_000 });
+    }
     return result;
   })().finally(() => artistRequests.delete(key));
   artistRequests.set(key, request);
@@ -153,11 +155,12 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
         {tracks.length > 20 && <button className="artist-show-all" type="button" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : `Show all ${tracks.length} songs`}</button>}
       </section>
       <section className="artist-releases" aria-labelledby="artist-releases">
-        <div className="artist-section-heading"><h2 id="artist-releases">Releases</h2><span>Albums</span></div>
+        <div className="artist-section-heading"><h2 id="artist-releases">Releases</h2></div>
         {artist.albums?.length ? <div className="artist-album-grid">{artist.albums.map((album) => <button type="button" className="artist-album" key={album.id} onClick={() => onAlbum(album.id)}>
           <span className="artist-album-cover"><Artwork src={album.artwork_url} size={192} lazy /><span><Play size={22} fill="currentColor" /></span></span>
-          <MarqueeText>{album.title}</MarqueeText><small>{[album.year, "Album"].filter(Boolean).join(" - ")}</small>
-        </button>)}</div> : <p className="feed-message">no albums for this artist yet</p>}
+          <MarqueeText>{album.title}</MarqueeText><small>{[album.year, album.release_type].filter(Boolean).join(" - ")}</small>
+        </button>)}</div> : !artist.releases_incomplete && <p className="feed-message">no releases for this artist yet</p>}
+        {artist.releases_incomplete && <button className="artist-show-all" type="button" onClick={() => setRetry((count) => count + 1)}>couldn’t load all releases. try again</button>}
       </section>
     </div>
   </div>;

@@ -2,6 +2,7 @@ package innertube
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,11 +21,12 @@ type CatalogArtist struct {
 	ArtworkURL string `json:"artwork_url"`
 }
 type CatalogAlbum struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	Artist     string `json:"artist"`
-	ArtworkURL string `json:"artwork_url"`
-	Year       string `json:"year"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	ArtworkURL  string `json:"artwork_url"`
+	Year        string `json:"year"`
+	ReleaseType string `json:"release_type,omitempty"`
 }
 
 type CatalogPlaylist struct {
@@ -41,12 +43,13 @@ type PlaylistDetail struct {
 }
 type ArtistDetail struct {
 	CatalogArtist
-	BannerURL        string         `json:"banner_url"`
-	Description      string         `json:"description"`
-	Subscribers      string         `json:"subscribers"`
-	MonthlyListeners string         `json:"monthly_listeners"`
-	Tracks           []models.Track `json:"tracks"`
-	Albums           []CatalogAlbum `json:"albums"`
+	BannerURL          string         `json:"banner_url"`
+	Description        string         `json:"description"`
+	Subscribers        string         `json:"subscribers"`
+	MonthlyListeners   string         `json:"monthly_listeners"`
+	Tracks             []models.Track `json:"tracks"`
+	Albums             []CatalogAlbum `json:"albums"`
+	ReleasesIncomplete bool           `json:"releases_incomplete,omitempty"`
 }
 type AlbumDetail struct {
 	CatalogAlbum
@@ -165,18 +168,32 @@ func artwork(value interface{}) string {
 }
 
 func (client *Client) catalogRequest(method string, payload map[string]interface{}) (map[string]interface{}, error) {
-	payload["context"] = map[string]interface{}{"client": map[string]interface{}{"clientName": "WEB_REMIX", "clientVersion": PlayerClients[3].Version, "hl": "en", "gl": "US"}}
+	return client.catalogRequestContext(context.Background(), method, payload, "")
+}
+
+func (client *Client) catalogRequestContext(ctx context.Context, method string, payload map[string]interface{}, visitor string) (map[string]interface{}, error) {
+	contextClient := map[string]interface{}{"clientName": "WEB_REMIX", "clientVersion": PlayerClients[3].Version, "hl": "en", "gl": "US"}
+	if visitor != "" {
+		contextClient["visitorData"] = visitor
+	}
+	payload["context"] = map[string]interface{}{"client": contextClient}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequest(http.MethodPost, "https://music.youtube.com/youtubei/v1/"+method+"?key="+PlayerClients[3].APIKey, bytes.NewReader(body))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://music.youtube.com/youtubei/v1/"+method+"?key="+PlayerClients[3].APIKey, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", PlayerClients[3].UserAgent)
 	request.Header.Set("Origin", "https://music.youtube.com")
+	if visitor != "" {
+		request.Header.Set("Referer", "https://music.youtube.com/")
+		request.Header.Set("X-YouTube-Client-Name", defaultMusicClientID)
+		request.Header.Set("X-YouTube-Client-Version", PlayerClients[3].Version)
+		request.Header.Set("X-Goog-Visitor-Id", visitor)
+	}
 	response, err := client.httpClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("catalog unavailable")
@@ -236,6 +253,10 @@ func catalogItems(root interface{}) ([]CatalogArtist, []CatalogAlbum, []models.T
 }
 
 func catalogSearchItems(root interface{}) ([]CatalogArtist, []CatalogAlbum, []CatalogPlaylist, []models.Track) {
+	return catalogSearchItemsWithAlbumLimit(root, 100)
+}
+
+func catalogSearchItemsWithAlbumLimit(root interface{}, albumLimit int) ([]CatalogArtist, []CatalogAlbum, []CatalogPlaylist, []models.Track) {
 	artists := []CatalogArtist{}
 	albums := []CatalogAlbum{}
 	playlists := []CatalogPlaylist{}
@@ -282,9 +303,13 @@ func catalogSearchItems(root interface{}) ([]CatalogArtist, []CatalogAlbum, []Ca
 			artists = append(artists, CatalogArtist{ID: id, Name: title, ArtworkURL: image})
 			seenArtists[id] = true
 		}
-		if isAlbumID(id) && !seenAlbums[id] && len(albums) < 100 {
+		if isAlbumID(id) && !seenAlbums[id] && (albumLimit == 0 || len(albums) < albumLimit) {
 			metadata := parseByline(subtitle)
-			albums = append(albums, CatalogAlbum{ID: id, Title: title, Artist: metadata.artist, ArtworkURL: image, Year: findYear(subtitle)})
+			album := CatalogAlbum{ID: id, Title: title, Artist: metadata.artist, ArtworkURL: image, Year: findYear(subtitle)}
+			if albumLimit == 0 {
+				album.ReleaseType = catalogReleaseType(subtitle)
+			}
+			albums = append(albums, album)
 			seenAlbums[id] = true
 		}
 		if isPlaylistID(id) && !seenPlaylists[id] && len(playlists) < 100 {
@@ -423,21 +448,6 @@ func artistBanner(header map[string]interface{}) string {
 	return banner
 }
 
-func artistAlbums(root interface{}) []CatalogAlbum {
-	albums := []CatalogAlbum{}
-	walkCatalog(root, func(node map[string]interface{}) {
-		shelf := object(node["musicCarouselShelfRenderer"])
-		if shelf == nil {
-			return
-		}
-		header := object(object(shelf["header"])["musicCarouselShelfBasicHeaderRenderer"])
-		if strings.EqualFold(textValue(header["title"]), "Albums") {
-			_, albums, _ = catalogItems(shelf["contents"])
-		}
-	})
-	return albums
-}
-
 func (client *Client) Artist(id string) (*ArtistDetail, error) {
 	if !ValidCatalogID(id, true) {
 		return nil, fmt.Errorf("invalid artist")
@@ -452,7 +462,7 @@ func (client *Client) Artist(id string) (*ArtistDetail, error) {
 		return nil, fmt.Errorf("artist unavailable")
 	}
 	_, _, tracks := catalogItems(root)
-	albums := artistAlbums(root)
+	albums, releasesIncomplete := client.artistReleases(root)
 	if expanded := client.artistSongs(root); len(expanded) > 0 {
 		tracks = expanded
 	}
@@ -467,7 +477,7 @@ func (client *Client) Artist(id string) (*ArtistDetail, error) {
 		subscription := object(object(header["subscriptionButton"])["subscribeButtonRenderer"])
 		subscribers = textValue(subscription["longSubscriberCountText"])
 	}
-	return &ArtistDetail{CatalogArtist: CatalogArtist{ID: id, Name: name, ArtworkURL: artwork(header["thumbnail"])}, BannerURL: artistBanner(header), Description: artistBiography(description), Subscribers: subscribers, MonthlyListeners: textValue(header["monthlyListenerCount"]), Tracks: tracks, Albums: albums}, nil
+	return &ArtistDetail{CatalogArtist: CatalogArtist{ID: id, Name: name, ArtworkURL: artwork(header["thumbnail"])}, BannerURL: artistBanner(header), Description: artistBiography(description), Subscribers: subscribers, MonthlyListeners: textValue(header["monthlyListenerCount"]), Tracks: tracks, Albums: albums, ReleasesIncomplete: releasesIncomplete}, nil
 }
 
 func (client *Client) Album(id string) (*AlbumDetail, error) {
