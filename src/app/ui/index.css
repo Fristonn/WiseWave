@@ -1505,6 +1505,7 @@ kbd {
 }
 
 .surface-btn,
+.settings-btn,
 .quick-picks-play,
 .artist-hero-actions > button,
 .welcome-secondary,
@@ -1528,6 +1529,7 @@ kbd {
 }
 
 .surface-btn:disabled,
+.settings-btn:disabled,
 .quick-picks-play:disabled,
 .artist-hero-actions > button:disabled,
 .welcome-secondary:disabled,
@@ -1537,6 +1539,7 @@ kbd {
 }
 
 .surface-btn:not(:disabled):hover,
+.settings-btn:not(:disabled):hover,
 .quick-picks-play:not(:disabled):hover,
 .artist-hero-actions > button:not(:disabled):hover,
 .welcome-secondary:hover,
@@ -5332,26 +5335,6 @@ kbd {
   margin-top: 16px;
 }
 
-.settings-equalizer-actions button {
-  padding: 7px 16px;
-  border: 1px solid #ffffff35;
-  border-radius: 7px;
-  background: transparent;
-  color: #eee;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.settings-equalizer-actions button:hover {
-  background: #ffffff10;
-}
-
-.settings-equalizer-actions button:focus-visible {
-  outline: 2px solid #a5bcb7;
-  outline-offset: 2px;
-}
-
 @media (max-width: 700px) {
   .settings-equalizer-panel {
     padding: 16px 12px;
@@ -5747,10 +5730,9 @@ kbd {
   gap: 8px;
 }
 
-.settings-btn,
 .settings-time {
   height: 36px;
-  padding: 0 16px;
+  padding: 0 12px;
   font-family: var(--font-player);
   font-size: 14px;
   font-weight: 500;
@@ -5760,15 +5742,6 @@ kbd {
   border-radius: 3px;
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s;
-}
-
-.settings-btn:hover {
-  background: #424247;
-  border-color: transparent;
-}
-
-.settings-time {
-  padding: 0 12px;
 }
 
 .settings-sw {
@@ -12213,3 +12186,9 @@ button:disabled:has(.classic) .classic {
 }
 
 .catalog-playlist-search { margin: 0 0 12px auto; }
+
+.settings-app .surface-btn:focus-visible,
+.settings-btn:focus-visible {
+  outline: 2px solid #aaa;
+  outline-offset: 2px;
+}

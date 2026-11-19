@@ -36,7 +36,7 @@ export function Equalizer() {
           </div>)}</div>
         </div>
       </div>
-      <div className="settings-equalizer-actions"><button type="button" onClick={() => update(settings.enabled, [...EQ_PRESETS.Flat])}>Reset</button></div>
+      <div className="settings-equalizer-actions"><button className="settings-btn" type="button" onClick={() => update(settings.enabled, [...EQ_PRESETS.Flat])}>Reset</button></div>
     </div>
   </section>;
 }
