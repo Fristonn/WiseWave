@@ -398,7 +398,7 @@ export function Settings({
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
-        vol: typeof parsed.vol === "number" && Number.isFinite(parsed.vol) ? Math.max(0, Math.min(100, parsed.vol)) : DEFAULT_SETTINGS.vol,
+        vol: typeof parsed.vol === "number" && Number.isFinite(parsed.vol) ? Math.round(Math.max(0, Math.min(100, parsed.vol))) : DEFAULT_SETTINGS.vol,
         auto: typeof autoplay === "boolean" ? autoplay : parsed.auto ?? DEFAULT_SETTINGS.auto,
         dc: typeof discordEnabled === "boolean" ? discordEnabled : parsed.dc ?? DEFAULT_SETTINGS.dc,
       };

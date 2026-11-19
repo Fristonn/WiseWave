@@ -20,9 +20,10 @@ function readPlaybackSettings() {
 
 function persistVolume(value: number) {
   try {
+    const percent = Math.round(value);
     const current = readPlaybackSettings();
-    if (current.vol === value) return;
-    const next = { ...current, vol: value };
+    if (current.vol === percent) return;
+    const next = { ...current, vol: percent };
     localStorage.setItem("wisewave-settings", JSON.stringify(next));
     window.dispatchEvent(new CustomEvent("wisewave-settings-changed", { detail: next }));
     window.dispatchEvent(new Event("wisewave-settings-updated"));
@@ -161,7 +162,7 @@ export function useMusic() {
   const positionRef = useRef(position);
   positionRef.current = position;
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(() => { const value = readPlaybackSettings().vol; return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 100; });
+  const [volume, setVolume] = useState(() => { const value = readPlaybackSettings().vol; return typeof value === "number" && Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : 100; });
   const [muted, setMuted] = useState(false);
   const volumeRef = useRef(volume);
   const mutedRef = useRef(muted);
