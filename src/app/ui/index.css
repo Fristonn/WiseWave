@@ -342,6 +342,77 @@ button:disabled {
   --app-region: no-drag;
 }
 
+.topbar:has(.window-caption) {
+  height: 80px;
+  padding-right: 0;
+}
+
+.window-caption {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  --app-region: no-drag;
+}
+
+.window-caption button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: light-dark(#171717, #fff);
+  cursor: default;
+  transition: background-color 100ms, color 100ms;
+}
+
+.window-caption[data-inactive="true"] button:not(:hover):not(:active):not([data-pointer="hover"]):not([data-pointer="pressed"]) {
+  color: light-dark(#17171770, #ffffff72);
+}
+
+.window-caption button:hover,
+.window-caption button[data-pointer="hover"] {
+  background: light-dark(#00000014, #ffffff1a);
+}
+
+.window-caption button:active,
+.window-caption button[data-pointer="pressed"] {
+  background: light-dark(#00000026, #ffffff33);
+}
+
+.window-caption .window-caption-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.window-caption .window-caption-close:active {
+  background: #c42b1ccc;
+}
+
+.window-caption button:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -3px;
+}
+
+.window-caption svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window-caption button {
+    transition: none;
+  }
+}
+
+:root[data-motion="reduce"] .window-caption button {
+  transition: none;
+}
+
 .history-controls {
   width: auto;
   display: flex;

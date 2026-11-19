@@ -546,6 +546,15 @@ export const TrayControl = {
   },
 } as const;
 
+export const CaptionControls = {
+  setMaximizeBounds(right: number, top: number, width: number, height: number): Promise<void> {
+    return call("CaptionControls.SetMaximizeBounds", right, top, width, height);
+  },
+  setTooltip(button: string, visible: boolean): Promise<void> {
+    return call("CaptionControls.SetTooltip", button, visible);
+  },
+} as const;
+
 export const MiniWindow = {
   close(): Promise<void> {
     return call("MiniWindow.Close");
@@ -686,6 +695,8 @@ export const events = {
   cacheClearProgressChanged: event<CacheClearProgress>("cache-clear-progress-changed"),
   downloadProgressChanged: event<DownloadProgress>("download-progress-changed"),
   mediaAction: event<string>("media-action"),
+  captionPointerChanged: event<string>("caption-pointer-changed"),
+  captionMaximizedChanged: event<boolean>("caption-maximized-changed"),
   trayAction: event<string>("tray-action"),
   playerFullscreenChanged: event<boolean>("player-fullscreen-changed"),
 } as const;

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"runtime"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -48,6 +49,7 @@ func Run(icon []byte) {
 		return engine.Tokens(ctx, videoID, visitor)
 	})
 	trayControl := &TrayControl{}
+	caption := &CaptionControls{}
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		trayControl.quitting.Store(true)
 	})
@@ -68,7 +70,7 @@ func Run(icon []byte) {
 	spotifyLogin := spotify.NewSpotifyLogin(spotifyAccount)
 	youtubeAccount := player.NewYouTubeAccount(music)
 	youtubeLogin := youtube.NewYouTubeLogin(youtubeAccount)
-	mygo.Bind(music, playback, trayControl, mini, discord, mediaSession, spotifyAccount, spotifyLogin, youtubeAccount, youtubeLogin, &system.Clipboard{})
+	mygo.Bind(music, playback, trayControl, caption, mini, discord, mediaSession, spotifyAccount, spotifyLogin, youtubeAccount, youtubeLogin, &system.Clipboard{})
 	if err := mygo.Protocol.Handle("audio", player.Audio{Music: music}); err != nil {
 		log.Fatal(err)
 	}
@@ -80,65 +82,35 @@ func Run(icon []byte) {
 			page.PreloadScript = `window.addEventListener("contextmenu", event => event.preventDefault(), true);`
 		}
 		startMinimized := mygo.App.WasOpenedAtLogin() && startupMinimized()
+		width, height := 1180, 760
+		if runtime.GOOS == "windows" {
+			area := mygo.Screen.PrimaryDisplay().WorkArea
+			if area.Width > 0 && area.Height > 0 {
+				width = max(900, min(width, area.Width-32))
+				height = max(600, min(height, area.Height-32))
+			}
+		}
 		window := mygo.NewWindow(mygo.WindowOptions{
-			Title:           "WiseWave",
-			Width:           1180,
-			Height:          760,
-			MinWidth:        900,
-			MinHeight:       600,
-			Maximized:       true,
-			Hidden:          startMinimized,
-			URL:             "/",
-			BackgroundColor: "#111113",
-			TitleBarStyle:   mygo.TitleBarHidden,
-			TitleBarHeight:  80,
-			Page:            page,
+			Title:             "WiseWave",
+			Width:             width,
+			Height:            height,
+			MinWidth:          900,
+			MinHeight:         600,
+			Maximized:         true,
+			Hidden:            startMinimized,
+			URL:               "/",
+			BackgroundColor:   "#111113",
+			TitleBarStyle:     mygo.TitleBarHidden,
+			TitleBarHeight:    80,
+			HideWindowButtons: runtime.GOOS == "windows",
+			Page:              page,
 		})
 		window.Page().OnContextMenu(func(e *mygo.ContextMenuEvent) {
 			e.PreventDefault()
 		})
 		window.SetWindowButtonsTheme(mygo.ThemeDark)
-		centerRestored := func() {
-			bounds := window.Bounds()
-			display := mygo.Screen.DisplayMatching(bounds)
-			area := display.WorkArea
-			if area.Width <= 0 || area.Height <= 0 {
-				area = display.Bounds
-			}
-			if area.Width <= 0 || area.Height <= 0 {
-				window.SetSize(1180, 760)
-				window.Center()
-				return
-			}
-
-			targetW := int(float64(area.Width) * 0.8)
-			targetH := int(float64(area.Height) * 0.8)
-			if targetW < 960 {
-				targetW = area.Width - 80
-			}
-			if targetH < 620 {
-				targetH = area.Height - 80
-			}
-			if targetW > area.Width-60 {
-				targetW = area.Width - 60
-			}
-			if targetH > area.Height-60 {
-				targetH = area.Height - 60
-			}
-
-			x := area.X + (area.Width-targetW)/2
-			y := area.Y + (area.Height-targetH)/2
-			window.SetBounds(mygo.Rectangle{
-				X:      x,
-				Y:      y,
-				Width:  targetW,
-				Height: targetH,
-			})
-		}
-		window.OnUnmaximize(func() {
-			centerRestored()
-		})
 		trayControl.window = window
+		caption.attach(window)
 		window.OnLeaveFullScreen(func() {
 			if trayControl.playerFullscreen {
 				if err := PlayerFullscreenChanged.Emit(window, false); err != nil {
