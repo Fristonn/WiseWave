@@ -74,47 +74,71 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Continue"
+          $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $false
+
+          function Invoke-GitHub {
+            & gh @args
+            if ($LASTEXITCODE -ne 0) { throw "GitHub release command failed: $($args[0..1] -join ' ')" }
+          }
 
           $tag = "latest"
           $short = $env:GITHUB_SHA.Substring(0, 7)
           $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
           if ($versionSource -notmatch 'appVersion\s*=\s*"([^"]+)"') { throw "Could not read app version." }
           $version = $Matches[1]
+          $updateTag = "v$version"
           $notes = @"
-          Latest Windows installers from main.
+          Latest WiseWave for Windows.
 
-          - wisewave-setup-*-amd64.exe — Intel/AMD 64-bit (most PCs)
-          - wisewave-setup-*-arm64.exe — Windows on ARM
+          - [Download for Intel or AMD](https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/wisewave-setup-amd64.exe)
+          - [Download for Windows on ARM](https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/wisewave-setup-arm64.exe)
 
-          Commit: $short
-          Updated automatically on every push to main.
+          Build: $short
           "@
-          $assets = @(
-            Get-ChildItem -LiteralPath "dist/windows-amd64","dist/windows-arm64" -File -ErrorAction Stop |
-              Where-Object { $_.Name -like "wisewave-setup-*.exe" }
-          )
-          if ($assets.Count -ne 2) {
-            throw "Expected amd64 and arm64 setup installers; found $($assets.Count): $($assets.Name -join ', ')"
+          $installers = @()
+          $manifests = @()
+          $archives = @()
+          foreach ($architecture in @("amd64", "arm64")) {
+            $dir = "dist/windows-$architecture"
+            $installer = Get-Item -LiteralPath "$dir/wisewave-setup-$version-$architecture.exe"
+            $manifest = Get-Item -LiteralPath "$dir/update-windows-$architecture.json"
+            $metadata = Get-Content -LiteralPath $manifest.FullName -Raw | ConvertFrom-Json
+            $archive = Get-Item -LiteralPath "$dir/wisewave-$version-windows-$architecture.tar.gz"
+            $expectedUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$updateTag/$($archive.Name)"
+            if ($metadata.version -ne $version -or $metadata.url -ne $expectedUrl -or $metadata.size -ne $archive.Length -or !$metadata.signature) {
+              throw "Invalid update manifest for $architecture."
+            }
+
+            $stable = Join-Path $installer.DirectoryName "wisewave-setup-$architecture.exe"
+            Copy-Item -LiteralPath $installer.FullName -Destination $stable -Force
+            $installers += $stable
+            $manifests += $manifest.FullName
+            $archives += $archive.FullName
+            $archives += @(Get-ChildItem -LiteralPath $dir -File -Filter "*.delta" | ForEach-Object FullName)
           }
 
-          $stableAssets = @(
-            foreach ($architecture in @("amd64", "arm64")) {
-              $source = $assets | Where-Object { $_.Name -like "*-$architecture.exe" }
-              $destination = Join-Path $source.DirectoryName "wisewave-setup-$architecture.exe"
-              Copy-Item -LiteralPath $source.FullName -Destination $destination -Force
-              Get-Item -LiteralPath $destination
+          gh release view $updateTag --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Invoke-GitHub release upload $updateTag --clobber -- @archives
+          } else {
+            Invoke-GitHub release create $updateTag --prerelease --latest=false --target $env:GITHUB_SHA --title "WiseWave $version update files" --notes "Signed files for automatic updates. Download WiseWave from the latest release." -- @archives
+          }
+
+          $publicAssets = @($installers) + @($manifests)
+          gh release view $tag --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Invoke-GitHub release upload $tag --clobber -- @publicAssets
+            Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
+            Invoke-GitHub release edit $tag --latest --title "WiseWave $version" --notes $notes
+          } else {
+            Invoke-GitHub release create $tag --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @publicAssets
+          }
+
+          $assetNames = Invoke-GitHub release view $tag --json assets --jq ".assets[].name"
+          foreach ($asset in $assetNames) {
+            if ($asset -match '^wisewave-setup-\d+\.\d+\.\d+-(amd64|arm64)\.exe$' -or
+                $asset -match '^wisewave-.*\.(tar\.gz|delta)$') {
+              Invoke-GitHub release delete-asset $tag $asset --yes
             }
-          )
-          $publishAssets = @($assets.FullName) + @($stableAssets.FullName)
-          $updateAssets = Get-ChildItem -LiteralPath "dist/windows-amd64","dist/windows-arm64" -File |
-            Where-Object { $_.Name -like "update-*.json" -or $_.Name -like "*.tar.gz" -or $_.Name -like "*.delta" }
-          $publishAssets += @($updateAssets.FullName)
-
-          # Replace any previous rolling release. Missing release/tag is fine.
-          gh release delete $tag --yes --cleanup-tag *> $null
-
-          $ErrorActionPreference = "Stop"
-          gh release create $tag --latest --title "WiseWave $version" --notes $notes --target $env:GITHUB_SHA -- $publishAssets
-          if ($LASTEXITCODE -ne 0) { throw "Could not publish release $tag." }
+          }
