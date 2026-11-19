@@ -1172,7 +1172,6 @@ kbd {
 .now-playing-content,
 .playlist-dialog,
 .song-menu-list,
-.search-history > [role="listbox"],
 .track-row,
 .quick-picks-row,
 .daily-mix-row {
@@ -1211,7 +1210,6 @@ kbd {
 .now-playing-content::-webkit-scrollbar,
 .playlist-dialog::-webkit-scrollbar,
 .song-menu-list::-webkit-scrollbar,
-.search-history > [role="listbox"]::-webkit-scrollbar,
 .track-row::-webkit-scrollbar,
 .quick-picks-row::-webkit-scrollbar {
   width: 6px;
@@ -1228,7 +1226,6 @@ kbd {
 .now-playing-content::-webkit-scrollbar-button,
 .playlist-dialog::-webkit-scrollbar-button,
 .song-menu-list::-webkit-scrollbar-button,
-.search-history > [role="listbox"]::-webkit-scrollbar-button,
 .track-row::-webkit-scrollbar-button,
 .quick-picks-row::-webkit-scrollbar-button {
   display: none;
@@ -1246,7 +1243,6 @@ kbd {
 .now-playing-content::-webkit-scrollbar-track,
 .playlist-dialog::-webkit-scrollbar-track,
 .song-menu-list::-webkit-scrollbar-track,
-.search-history > [role="listbox"]::-webkit-scrollbar-track,
 .track-row::-webkit-scrollbar-track,
 .quick-picks-row::-webkit-scrollbar-track {
   background: transparent;
@@ -1262,7 +1258,6 @@ kbd {
 .now-playing-content::-webkit-scrollbar-thumb,
 .playlist-dialog::-webkit-scrollbar-thumb,
 .song-menu-list::-webkit-scrollbar-thumb,
-.search-history > [role="listbox"]::-webkit-scrollbar-thumb,
 .track-row::-webkit-scrollbar-thumb,
 .quick-picks-row::-webkit-scrollbar-thumb {
   border: 0;
@@ -1280,7 +1275,6 @@ kbd {
 .now-playing-content::-webkit-scrollbar-thumb:hover,
 .playlist-dialog::-webkit-scrollbar-thumb:hover,
 .song-menu-list::-webkit-scrollbar-thumb:hover,
-.search-history > [role="listbox"]::-webkit-scrollbar-thumb:hover,
 .track-row::-webkit-scrollbar-thumb:hover,
 .quick-picks-row::-webkit-scrollbar-thumb:hover {
   background: rgb(255 255 255 / 0.38);
@@ -1296,7 +1290,6 @@ kbd {
 .now-playing-content::-webkit-scrollbar-corner,
 .playlist-dialog::-webkit-scrollbar-corner,
 .song-menu-list::-webkit-scrollbar-corner,
-.search-history > [role="listbox"]::-webkit-scrollbar-corner,
 .track-row::-webkit-scrollbar-corner,
 .quick-picks-row::-webkit-scrollbar-corner {
   background: transparent;
@@ -6747,7 +6740,7 @@ kbd {
 .search-history > [role="listbox"] {
   max-height: 360px;
   overflow-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
   overscroll-behavior: contain;
   padding-right: 2px;
 }
