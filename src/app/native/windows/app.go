@@ -156,19 +156,15 @@ func Run(icon []byte) {
 		})
 		if err != nil {
 			log.Printf("system tray unavailable: %v", err)
-			window.Show()
-			return
+		} else {
+			trayControl.tray = tray
+			tray.OnClick(show)
+			tray.OnRightClick(func() {
+				if err := showTrayMenu(trayControl); err != nil {
+					log.Printf("tray menu: %v", err)
+				}
+			})
 		}
-		trayControl.tray = tray
-		if startMinimized {
-			window.Minimize()
-		}
-		tray.OnClick(show)
-		tray.OnRightClick(func() {
-			if err := showTrayMenu(trayControl); err != nil {
-				log.Printf("tray menu: %v", err)
-			}
-		})
 		window.OnMinimize(func() {
 			if trayControl.miniWhenMinimized.Load() && !mini.isOpen() {
 				trayControl.autoMini.Store(true)
@@ -181,7 +177,7 @@ func Run(icon []byte) {
 			}
 		})
 		window.OnClose(func(event *mygo.CloseEvent) {
-			if !trayControl.quitting.Load() && trayControl.minimizeToTray.Load() {
+			if !trayControl.quitting.Load() && trayControl.tray != nil && trayControl.minimizeToTray.Load() {
 				event.PreventDefault()
 				window.Hide()
 			} else if !trayControl.quitting.Load() {
@@ -189,6 +185,9 @@ func Run(icon []byte) {
 				mygo.App.Quit()
 			}
 		})
+		if startMinimized {
+			window.Minimize()
+		}
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

@@ -69,6 +69,9 @@ func startupMinimized() bool {
 }
 
 func (tray *TrayControl) StartupMode() string {
+	if mygo.IsDev() {
+		return "Unavailable"
+	}
 	tray.startupMu.Lock()
 	defer tray.startupMu.Unlock()
 	if !mygo.App.OpenAtLogin() {

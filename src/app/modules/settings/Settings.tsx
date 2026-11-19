@@ -394,7 +394,7 @@ export function Settings({
       ["dcPreset", "dcLine1", "dcLine2", "dcLine3", "dcArt", "dcTime", "dcPause"].forEach((key) => delete parsed[key]);
       if (parsed.lyrStyle === "Glow" || parsed.lyrStyle === "Eeriee") parsed.lyrStyle = "Default";
       parsed.progressStyle = readProgressStyle(parsed.progressStyle);
-      if (typeof parsed.startup === "boolean") parsed.startup = parsed.startup ? "Yes" : "No";
+      delete parsed.startup;
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
@@ -424,6 +424,8 @@ export function Settings({
   const [showLyricsSources, setShowLyricsSources] = useState(false);
   const [query, setQuery] = useState("");
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [startupMode, setStartupMode] = useState<string | null>(null);
+  const [savingStartup, setSavingStartup] = useState(false);
   const [progressPickerOpen, setProgressPickerOpen] = useState(false);
   const [progressPickerClosing, setProgressPickerClosing] = useState(false);
   const progressPickerTimer = useRef<number | null>(null);
@@ -530,14 +532,29 @@ export function Settings({
       return;
     }
     if (key === "startup") {
-      void TrayControl.setStartupMode(String(value)).then(() => saveSetting(key, value)).catch((error: unknown) => setNote(error instanceof Error ? error.message : "couldn't save your startup setting"));
+      if (savingStartup || startupMode === null || startupMode === "Unavailable" || startupMode === value) return;
+      setSavingStartup(true);
+      void TrayControl.setStartupMode(String(value)).then(() => {
+        setStartupMode(String(value));
+      }).catch(async () => {
+        setNote("couldn't save your startup setting");
+        const mode = await TrayControl.startupMode().catch(() => null);
+        if (mode !== null) setStartupMode(mode);
+      }).finally(() => setSavingStartup(false));
       return;
     }
     saveSetting(key, value);
   };
 
   useEffect(() => {
-    void TrayControl.startupMode().then((mode) => setSt((previous) => ({ ...previous, startup: mode }))).catch(() => setNote("couldn't check your startup setting"));
+    if (!isMyGo()) {
+      setStartupMode("Unavailable");
+      return;
+    }
+    void TrayControl.startupMode().then(setStartupMode).catch(() => {
+      setStartupMode("Unavailable");
+      setNote("couldn't check your startup setting");
+    });
   }, []);
 
   useEffect(() => {
@@ -639,7 +656,7 @@ export function Settings({
 
   const renderControl = (r: SettingRowDef) => {
     if (!r.k && r.t !== "btn" && r.t !== "txt") return null;
-    const val = r.k ? st[r.k] : undefined;
+    const val = r.k === "startup" ? startupMode : r.k ? st[r.k] : undefined;
 
     switch (r.t) {
       case "tog":
@@ -700,6 +717,8 @@ export function Settings({
               aria-haspopup="listbox"
               aria-expanded={isOpen}
               aria-label={r.l}
+              aria-busy={r.k === "startup" && (startupMode === null || savingStartup)}
+              disabled={r.k === "startup" && (startupMode === null || startupMode === "Unavailable" || savingStartup)}
               onKeyDown={(event) => {
                 if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                   event.preventDefault();
@@ -713,7 +732,7 @@ export function Settings({
                 setOpenDropdown(isOpen ? null : (r.k as string));
               }}
             >
-              <span className="ddl">{r.k === "lyrStyle" ? val === "Focus" ? "Line Focus" : "Word Flow" : String(val)}</span>
+              <span className="ddl">{r.k === "startup" ? val === null ? "checking…" : val === "Unavailable" ? "unavailable" : val : r.k === "lyrStyle" ? val === "Focus" ? "Line Focus" : "Word Flow" : String(val)}</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
