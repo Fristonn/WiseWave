@@ -16,10 +16,14 @@ export function readZoom() {
   return 1;
 }
 
+export function applyZoom(value: number) {
+  document.documentElement.style.zoom = String(value);
+}
+
 export function setZoom(value: number) {
   if (!(ZOOM_LEVELS as readonly number[]).includes(value)) return;
   currentZoom = value;
-  document.documentElement.style.zoom = String(value);
+  applyZoom(value);
   try { localStorage.setItem("wisewave-zoom", String(value)); } catch {}
   window.dispatchEvent(new CustomEvent("wisewave-zoom-changed", { detail: value }));
 }
@@ -28,7 +32,7 @@ export function syncZoom(value: string | null) {
   const next = Number(value);
   if (value !== null && (ZOOM_LEVELS as readonly number[]).includes(next)) {
     currentZoom = next;
-    document.documentElement.style.zoom = String(next);
+    applyZoom(next);
     window.dispatchEvent(new CustomEvent("wisewave-zoom-changed", { detail: next }));
   }
 }

@@ -4,7 +4,7 @@ import { MiniPlayer } from "./modules/player/mini/MiniPlayer";
 import { Player } from "./modules/player/Player";
 import splashLogo from "../../resources/splash.svg";
 import staticLogo from "../../resources/images/icon.png";
-import { readZoom, setZoom, stepZoom, syncZoom } from "./shared/zoom";
+import { applyZoom, readZoom, setZoom, stepZoom, syncZoom } from "./shared/zoom";
 import { SnackbarProvider } from "./shared/ui/Snackbar";
 import { AccountImportNotifications } from "./modules/accounts/shared/ImportProgress";
 import "./ui/index.css";
@@ -24,7 +24,7 @@ try {
   }
 } catch {}
 
-document.documentElement.style.zoom = String(readZoom());
+applyZoom(readZoom());
 
 document.addEventListener("keydown", (event) => {
   if (!event.ctrlKey || event.metaKey || event.altKey) return;
@@ -41,28 +41,20 @@ document.addEventListener("keydown", (event) => {
 
 let wheelZoomDelta = 0;
 let wheelZoomTimer = 0;
-const onZoomWheel = (event: WheelEvent) => {
+window.addEventListener("wheel", (event) => {
   if (!event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!event.cancelable) return;
   event.preventDefault();
   window.clearTimeout(wheelZoomTimer);
   wheelZoomTimer = window.setTimeout(() => { wheelZoomDelta = 0; }, 250);
+  const mode = event.deltaMode;
   if (Math.sign(wheelZoomDelta) !== Math.sign(event.deltaY)) wheelZoomDelta = 0;
-  wheelZoomDelta += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1);
+  wheelZoomDelta += event.deltaY * (mode === WheelEvent.DOM_DELTA_LINE ? 16 : mode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1);
   if (Math.abs(wheelZoomDelta) >= 80) {
     stepZoom(wheelZoomDelta < 0 ? 1 : -1);
     wheelZoomDelta = 0;
   }
-};
-let zoomWheelEnabled = false;
-const setZoomWheelEnabled = (enabled: boolean) => {
-  if (zoomWheelEnabled === enabled) return;
-  zoomWheelEnabled = enabled;
-  if (enabled) document.addEventListener("wheel", onZoomWheel, { passive: false, capture: true });
-  else document.removeEventListener("wheel", onZoomWheel, true);
-};
-document.addEventListener("keydown", (event) => setZoomWheelEnabled(event.ctrlKey), true);
-document.addEventListener("keyup", (event) => setZoomWheelEnabled(event.ctrlKey), true);
-window.addEventListener("blur", () => setZoomWheelEnabled(false));
+}, { passive: false, capture: true });
 window.addEventListener("storage", (event) => { if (event.key === "wisewave-zoom") syncZoom(event.newValue); });
 
 function App() {
