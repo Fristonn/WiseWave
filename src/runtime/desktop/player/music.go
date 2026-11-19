@@ -271,6 +271,17 @@ func (m *Music) Popular() ([]models.Track, error) {
 	return tracks, nil
 }
 
+func (m *Music) RadioQueue(id, playlistID, continuation string) (*innertube.BrowseResult, error) {
+	if !videoID.MatchString(id) || len(playlistID) > 512 || len(continuation) > 16384 {
+		return nil, errors.New("Invalid radio queue")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	return m.client.MusicClient.GetUpNext(ctx, innertube.UpNextOptions{
+		VideoID: id, PlaylistID: playlistID, Continuation: continuation,
+	})
+}
+
 func (m *Music) Related(id string) ([]models.Track, error) {
 	if !videoID.MatchString(id) {
 		return nil, errors.New("Invalid track")

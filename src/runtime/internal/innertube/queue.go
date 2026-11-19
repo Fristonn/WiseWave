@@ -105,6 +105,13 @@ func upNextContinuationToken(root any) string {
 				}
 			}
 		}
+		contents, _ := panel.get("contents").([]any)
+		for _, value := range contents {
+			entry, _ := value.(*jsonObject)
+			if token := nestedString(entry.get("continuationItemRenderer"), "token"); token != "" {
+				return token
+			}
+		}
 		return ""
 	}
 	var walk func(any) string

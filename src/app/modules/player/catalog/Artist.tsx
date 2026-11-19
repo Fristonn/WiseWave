@@ -46,7 +46,7 @@ export function loadArtist(id: string, name: string): Promise<ArtistDetail> {
 
 export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = null, playing = false }: {
   id: string; name: string; onBack: () => void;
-  onPlay: (track: Track, tracks: Track[]) => void;
+  onPlay: (track: Track, tracks: Track[], options?: { collection?: boolean }) => void;
   onArtist: (track: Track) => void; onAlbum: (id: string) => void;
   current?: Track | null; playing?: boolean;
 }) {
@@ -114,7 +114,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
     setMixLoading(true); setMixError("");
     try {
       const related = await Music.related(seed.id);
-      if (request === mixRequest.current) onPlay(seed, [seed, ...related.filter((track) => track.id !== seed.id)]);
+      if (request === mixRequest.current) onPlay(seed, [seed, ...related.filter((track) => track.id !== seed.id)], { collection: true });
     } catch { if (request === mixRequest.current) setMixError("couldn't load this artist mix. try again"); }
     finally { if (request === mixRequest.current) setMixLoading(false); }
   };

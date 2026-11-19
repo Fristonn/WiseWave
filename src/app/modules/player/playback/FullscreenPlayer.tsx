@@ -149,7 +149,7 @@ export function FullscreenPlayer({ music, onClose, liked, onLike }: { music: Ret
           <div className="fullscreen-player-times"><span>{time(position)}</span><span>{time(music.duration)}</span></div>
         </div>
         <div className="fullscreen-player-controls">
-          <button className="fullscreen-player-secondary" type="button" aria-label="Shuffle upcoming songs" onClick={music.shuffle} disabled={music.trackLoading || !(music.queue.length > 1 || music.upNext.length > 1 || music.mixTracks.length > 1)}><ShuffleIcon /></button>
+          <button className="fullscreen-player-secondary" type="button" aria-label="Shuffle upcoming songs" onClick={music.shuffle} disabled={music.trackLoading || !(music.queue.length > 1 || music.upNext.length > 1)}><ShuffleIcon /></button>
           <button type="button" aria-label="Previous song" onClick={music.previous} disabled={music.trackLoading}><ApplePreviousIcon /></button>
           <button className="fullscreen-player-play" type="button" aria-label={music.playing ? "Pause" : "Play"} onClick={() => void music.toggle()} disabled={music.trackLoading}>{music.playing ? <ApplePauseIcon /> : <ApplePlayIcon />}</button>
           <button type="button" aria-label="Next song" onClick={() => void music.next()} disabled={music.trackLoading || !hasNext}><AppleNextIcon /></button>

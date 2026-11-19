@@ -436,6 +436,9 @@ export const Music = {
   popular(): Promise<Track[]> {
     return call("Music.Popular");
   },
+  radioQueue(id: string, playlistID: string, continuation: string): Promise<BrowseResult | null> {
+    return call("Music.RadioQueue", id, playlistID, continuation);
+  },
   related(id: string): Promise<Track[]> {
     return call("Music.Related", id);
   },

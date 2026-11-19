@@ -129,7 +129,7 @@ export function Collection({
             className="collection-play-btn"
             disabled={!tracks.length}
             type="button"
-            onClick={() => visibleSongs.length && onPlay(visibleSongs[0], visibleSongs, { collection: true })}
+            onClick={() => visibleSongs.length && onPlay(visibleSongs[0], visibleSongs, { collection: kind === "liked" })}
           >
             <PlayIcon className="play-icon-glyph" />
           </button>
@@ -169,8 +169,8 @@ export function Collection({
               role="button"
               tabIndex={0}
               onContextMenu={(event) => openSongMenu(event, song, kind === "playlist" && playlist ? { kind: "playlist", id: playlist.id } : kind === "liked" ? { kind: "liked" } : { kind: "downloads" })}
-              onClick={() => onPlay(song, visibleSongs, { collection: true })}
-              onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onPlay(song, visibleSongs, { collection: true }); } }}
+              onClick={() => onPlay(song, visibleSongs, { collection: kind === "liked" })}
+              onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onPlay(song, visibleSongs, { collection: kind === "liked" }); } }}
             >
               <span className="song-index-num">{index + 1}</span>
 

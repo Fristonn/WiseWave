@@ -36,7 +36,7 @@ export function CatalogCollection({ kind, id, onBack, onPlay, onArtist, current 
   }, [id, kind, retry, localData]);
   const collection = localData || album;
   const tracks = collection?.tracks || [];
-  const play = (track: Track, list = tracks) => onPlay(track, list, { collection: true });
+  const play = (track: Track, list = tracks) => onPlay(track, list, { collection: searchContext !== "mix" });
   const visibleTracks = query.trim() ? tracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) : tracks;
   const shuffle = () => {
     const shuffled = [...tracks];

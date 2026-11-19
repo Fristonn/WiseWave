@@ -69,6 +69,47 @@ function upcomingMixTracks(items: Track[], currentID: string, previous: Track[])
   });
 }
 
+const radioVersionLabel = /\b(?:remix(?:ed)?|remaster(?:ed)?|live|acoustic|unplugged|instrumental|karaoke|cover|slowed|sped[ -]?up|speed[ -]?up|nightcore|reverb|extended|radio edit|alternate take|demo|version|official (?:music )?(?:video|audio)|lyric(?:s| video)?)\b/i;
+
+function radioText(value: string): string {
+  return value.normalize("NFKD").toLowerCase().replace(/(\p{Script=Latin})\p{M}+/gu, "$1").replace(/[^\p{L}\p{M}\p{N}]+/gu, " ").trim();
+}
+
+function radioSongKey(track: Track): string {
+  const title = track.title
+    .replace(/\([^()]*\)|\[[^\[\]]*\]/g, (label) => radioVersionLabel.test(label) || /^[(\[]\s*(?:feat\.?|ft\.?)\s/i.test(label) ? " " : label)
+    .replace(/\s+[-??|]\s+(.+)$/, (suffix, label: string) => radioVersionLabel.test(label) ? "" : suffix)
+    .replace(/\s+(?:slowed(?:\s*(?:\+|and|&)\s*reverb)?|sped[ -]?up|nightcore|(?:\d{4}\s+)?remaster(?:ed)?|radio edit)$/i, "");
+  const artist = radioText(track.artist.replace(/\s+(?:feat\.?|ft\.?|featuring)\s+.*$/i, ""));
+  const name = radioText(title);
+  return artist && name ? name + "\u0000" + artist : "";
+}
+
+function radioTracks(items: Track[], excluded: Iterable<Track>): Track[] {
+  const ids = new Set<string>();
+  const songs = new Set<string>();
+  for (const item of excluded) {
+    ids.add(item.id);
+    const key = radioSongKey(item);
+    if (key) songs.add(key);
+  }
+  return items.filter((item) => {
+    const key = radioSongKey(item);
+    if (!item.id || ids.has(item.id) || (key && songs.has(key))) return false;
+    ids.add(item.id);
+    if (key) songs.add(key);
+    return true;
+  });
+}
+
+type RadioSession = {
+  seed: string;
+  playlist: string;
+  continuation: string;
+  exhausted: boolean;
+  pending?: Promise<void>;
+};
+
 export function useMusic() {
   const playbackVersion = useRef(0);
   const seekVersionRef = useRef(0);
@@ -105,7 +146,11 @@ export function useMusic() {
     try { return localStorage.getItem("wisewave-preserve-for-you") === "true"; }
     catch { return false; }
   });
-  const forYouSequence = useRef(false);
+  const radioSequence = useRef(false);
+  const radioSession = useRef<RadioSession | null>(null);
+  const radioBuffer = useRef<Track[]>([]);
+  const radioSeen = useRef(new Map<string, Track>());
+  const [radioPreview, setRadioPreview] = useState<Track[]>([]);
   const collectionSequence = useRef(false);
   const collectionTracks = useRef<Track[]>([]);
   const [playing, setPlaying] = useState(false);
@@ -145,7 +190,6 @@ export function useMusic() {
   const playbackControlVersion = useRef(0);
   const autoplayRef = useRef(autoplay);
   autoplayRef.current = autoplay;
-  const relatedRef = useRef<{ id: string; tracks: Promise<Track[]> } | null>(null);
   const [error, setError] = useState("");
   const [lyrics, setLyrics] = useState<Line[]>([]);
   const [lyricsCredit, setLyricsCredit] = useState<import("../../../mygo").Record | null>(null);
@@ -295,11 +339,17 @@ export function useMusic() {
     return () => { active = false; };
   }, [history, track?.id, forYouRetry]);
 
-  const play = useCallback((item: Track, list: Track[] = [item], options?: { fromHistory?: boolean; forYou?: boolean; collection?: boolean; continueCollection?: boolean }) => {
+  const play = useCallback((item: Track, list: Track[] = [item], options?: { fromHistory?: boolean; radio?: boolean; collection?: boolean; continueCollection?: boolean }) => {
     const current = trackRef.current;
-    const playList = list.length ? list : [item];
+    if (!options?.fromHistory && !options?.continueCollection && !options?.radio) {
+      radioSession.current = null;
+      radioBuffer.current = [];
+      setRadioPreview([]);
+    }
+    radioSeen.current.set(item.id, item);
+    const playList = (options?.collection || options?.continueCollection) && list.length ? list : [item];
     const index = Math.max(0, playList.findIndex((entry) => entry.id === item.id));
-    if (!options?.fromHistory) forYouSequence.current = options?.forYou === true;
+    if (!options?.fromHistory) radioSequence.current = options?.radio === true;
     if (!options?.fromHistory) collectionSequence.current = options?.collection === true;
     if (options?.collection && !options.continueCollection) collectionTracks.current = playList;
     if (!options?.fromHistory) {
@@ -464,8 +514,49 @@ export function useMusic() {
     return () => { active = false; };
   }, [track?.id, track?.title, track?.artist, track?.album]);
 
+  const loadRadioPage = useCallback((seed: string): Promise<void> => {
+    const session = radioSession.current ?? { seed, playlist: "", continuation: "", exhausted: false };
+    radioSession.current = session;
+    if (session.pending) return session.pending;
+    if (session.exhausted) return Promise.resolve();
+
+    const requestedToken = session.continuation;
+    session.pending = Music.radioQueue(session.seed, session.playlist, requestedToken).then((page) => {
+      if (radioSession.current !== session) return;
+      session.playlist = page?.queuePlaylistId || session.playlist;
+      session.continuation = page?.continuationToken || "";
+      session.exhausted = !session.continuation || session.continuation === requestedToken;
+      const candidates = (page?.items ?? []).flatMap((item): Track[] => {
+        const id = item.videoId || item.id;
+        if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id) || !item.title) return [];
+        return [{
+          id, title: item.title, artist: item.artist || item.artists || "", artist_id: "",
+          album: item.album || "", album_id: item.albumId || "",
+          duration: item.duration || "", duration_seconds: parseDuration(item.duration),
+          album_art_url: item.thumbnail || "", stream_url: "", is_favorite: false, is_explicit: item.isExplicit,
+        }];
+      });
+      const current = trackRef.current;
+      const excluded = [...radioSeen.current.values(), ...(current ? [current] : []), ...queueRef.current, ...upNextRef.current];
+      radioBuffer.current = radioTracks([...radioBuffer.current, ...candidates], excluded);
+      setRadioPreview(radioBuffer.current);
+    }).finally(() => { session.pending = undefined; });
+    return session.pending;
+  }, []);
+
+  const radioNeedsRefill = queue.length + upNext.length + radioPreview.length <= 5;
   useEffect(() => {
-    if (preserveForYou && mixTracksRef.current.length) return;
+    if (!autoplay || repeatMode === "queue") {
+      radioSession.current = null;
+      radioBuffer.current = [];
+      setRadioPreview([]);
+      return;
+    }
+    if (track && radioNeedsRefill) void loadRadioPage(track.id).catch(() => {});
+  }, [autoplay, track?.id, radioNeedsRefill, repeatMode, loadRadioPage]);
+
+  useEffect(() => {
+    if (radioSequence.current || (preserveForYou && mixTracksRef.current.length)) return;
     if (!track) {
       setMixTracks([]);
       setMixLoading(false);
@@ -476,7 +567,6 @@ export function useMusic() {
     setMixLoading(true);
     let active = true;
     const req = Music.related(track.id);
-    relatedRef.current = { id: track.id, tracks: req };
     req.then((tracks) => {
       if (active) {
         const items = upcomingMixTracks(tracks, track.id, previousStackRef.current);
@@ -492,9 +582,9 @@ export function useMusic() {
   const playQueued = (index: number) => {
     const items = queueRef.current;
     if (!items[index]) return;
-    queueRef.current = items.slice(index + 1);
+    queueRef.current = items.filter((_, itemIndex) => itemIndex !== index);
     setQueue(queueRef.current);
-    play(items[index], [items[index], ...upNextRef.current.filter((item) => item.id !== items[index].id)], { forYou: forYouSequence.current, collection: collectionSequence.current, continueCollection: true });
+    play(items[index], [items[index], ...upNextRef.current.filter((item) => item.id !== items[index].id)], { radio: radioSequence.current, collection: collectionSequence.current, continueCollection: true });
   };
   const next = async () => {
     if (trackLoading || playbackControlPending.current) return;
@@ -511,11 +601,11 @@ export function useMusic() {
       return;
     }
     if (queueRef.current.length) {
-      if (mode === "queue" && track) {
+      if (mode === "queue" && track && !collectionSequence.current && !radioSequence.current) {
         const items = queueRef.current;
         queueRef.current = [...items.slice(1), track];
         setQueue(queueRef.current);
-        play(items[0], [items[0], ...upNextRef.current], { collection: collectionSequence.current, forYou: forYouSequence.current, continueCollection: true });
+        play(items[0], [items[0], ...upNextRef.current], { collection: collectionSequence.current, radio: radioSequence.current, continueCollection: true });
         return;
       }
       playQueued(0);
@@ -530,63 +620,43 @@ export function useMusic() {
       play(list[0], list, { collection: true, continueCollection: true });
       return;
     }
-    if (collectionSequence.current && !autoplay) return;
-    if (preserveForYou && autoplay && mixTracksRef.current.length) {
-      const recommendations = upcomingMixTracks(mixTracksRef.current, trackRef.current?.id || "", previousStackRef.current);
-      if (recommendations.length) play(recommendations[0], recommendations, { forYou: true });
+    if (upNextRef.current.length && (!radioSequence.current || autoplay)) {
+      play(upNextRef.current[0], upNextRef.current, { radio: radioSequence.current, continueCollection: true });
       return;
     }
-    if (upNextRef.current.length) {
-      play(upNextRef.current[0], upNextRef.current, { forYou: forYouSequence.current });
-      return;
-    }
-    if (autoplay && track) {
-      const recommendations = upcomingMixTracks(mixTracksRef.current, track.id, previousStackRef.current);
-      const nextTrack = recommendations[0];
-      if (nextTrack) {
-        play(nextTrack, recommendations, { forYou: true });
-        return;
-      }
-      if (recommendations.length) {
-        upNextRef.current = [];
-        setUpNext([]);
-      }
-    }
-    if (upNextRef.current.length) {
-      play(upNextRef.current[0], upNextRef.current);
-      return;
-    }
-    if (mode === "queue" && track) {
+    if (mode === "queue" && track && (!radioSequence.current || autoplay)) {
       const list = playbackListRef.current.length ? playbackListRef.current : [track];
-      play(list[0], list);
+      play(list[0], list, { radio: radioSequence.current, continueCollection: true });
       return;
     }
-    if (!autoplay || !track) return;
-    if (preserveForYou && mixTracksRef.current.length) return;
+    if (!autoplay || !track || mode === "queue") return;
+    const playRadio = (candidates: Track[]) => {
+      const recommendations = radioTracks(candidates, [...radioSeen.current.values(), track]);
+      if (!recommendations.length) return false;
+      const [first, ...remaining] = recommendations;
+      radioBuffer.current = remaining;
+      setRadioPreview(remaining);
+      play(first, [first], { radio: true });
+      return true;
+    };
+    if (playRadio(radioBuffer.current)) return;
     if (nextPending.current === playbackVersion.current) return;
     nextPending.current = version;
     try {
-      const tracks = await (relatedRef.current?.id === track.id ? relatedRef.current.tracks : Music.related(track.id));
-      if (version !== playbackVersion.current || controlVersion !== playbackControlVersion.current || playbackControlPending.current || !autoplayRef.current) return;
-      if (queueRef.current.length) { playQueued(0); return; }
-      if (upNextRef.current.length) { play(upNextRef.current[0], upNextRef.current); return; }
-      if (repeatModeRef.current === "queue" && track) {
-        const list = playbackListRef.current.length ? playbackListRef.current : [track];
-        play(list[0], list);
-        return;
+      for (let page = 0; page < 3; page++) {
+        await loadRadioPage(track.id);
+        if (version !== playbackVersion.current || controlVersion !== playbackControlVersion.current || playbackControlPending.current || !autoplayRef.current) return;
+        if (queueRef.current.length) { playQueued(0); return; }
+        if (repeatModeRef.current === "queue") {
+          const collection = collectionSequence.current;
+          const list = (collection ? collectionTracks.current : playbackListRef.current);
+          if (list.length && !radioSequence.current) play(list[0], list, { collection, continueCollection: true });
+          return;
+        }
+        if (playRadio(radioBuffer.current)) return;
+        if (radioSession.current?.exhausted) break;
       }
-      const ready = upcomingMixTracks(mixTracksRef.current, track.id, previousStackRef.current);
-      if (ready.length) {
-        play(ready[0], ready, { forYou: true });
-        return;
-      }
-      const unique = upcomingMixTracks(tracks, track.id, previousStackRef.current);
-      if (unique.length) {
-        mixTracksRef.current = unique;
-        setMixTracks(unique);
-        play(unique[0], unique, { forYou: true });
-      }
-      else setError("no related songs found");
+      setError("couldn't load more songs");
     } catch {
       if (version === playbackVersion.current) setError("couldn't load the next song");
     } finally { if (nextPending.current === version) nextPending.current = null; }
@@ -599,30 +669,15 @@ export function useMusic() {
       setQueue(result);
       return;
     }
-    if (collectionSequence.current) {
-      const result = [...upNextRef.current];
-      for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
-      upNextRef.current = result;
-      setUpNext(result);
-      const currentIndex = collectionTracks.current.findIndex((item) => item.id === trackRef.current?.id);
-      collectionTracks.current = [...collectionTracks.current.slice(0, currentIndex + 1), ...result];
-      if (trackRef.current && readPlaybackSettings().resume !== false) {
-        try { localStorage.setItem(collectionStateKey, JSON.stringify({ trackID: trackRef.current.id, tracks: collectionTracks.current, next: result })); } catch {}
-      }
-      return;
-    }
-    const queued = queueRef.current.length > 1;
-    const result = [...(queued ? queueRef.current : upNextRef.current.length > 1 ? upNextRef.current : mixTracksRef.current.filter((item) => item.id !== trackRef.current?.id))];
+    if (!collectionSequence.current || upNextRef.current.length < 2) return;
+    const result = [...upNextRef.current];
     for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
-    if (queued) {
-      queueRef.current = result;
-      setQueue(result);
-    } else {
-      forYouSequence.current = true;
-      upNextRef.current = result;
-      setUpNext(result);
-      mixTracksRef.current = result;
-      setMixTracks(result);
+    const upcomingIDs = new Set(result.map((item) => item.id));
+    collectionTracks.current = [...collectionTracks.current.filter((item) => !upcomingIDs.has(item.id)), ...result];
+    upNextRef.current = result;
+    setUpNext(result);
+    if (trackRef.current && readPlaybackSettings().resume !== false) {
+      try { localStorage.setItem(collectionStateKey, JSON.stringify({ trackID: trackRef.current.id, tracks: collectionTracks.current, next: result })); } catch {}
     }
   };
   const toggle = async () => {
@@ -794,12 +849,13 @@ export function useMusic() {
   }, [track, playing, queue.length, upNext.length, repeatMode, autoplay, muted]);
 
   useEffect(() => {
-    const recommendation = upcomingMixTracks(mixTracks, track?.id || "", previousStackRef.current)[0];
-    const nextID = forwardStackRef.current.at(-1)?.id || queue[0]?.id || (collectionSequence.current
-      ? upNext[0]?.id || (repeatMode === "queue" ? collectionTracks.current[0]?.id : autoplay ? recommendation?.id : undefined)
-      : preserveForYou && autoplay && mixTracks.length ? recommendation?.id : upNext[0]?.id || (autoplay ? recommendation?.id : undefined));
+    const queued = queue[0]?.id || ((!radioSequence.current || autoplay) ? upNext[0]?.id : undefined);
+    const repeatTrack = repeatMode === "queue" && (!radioSequence.current || autoplay)
+      ? (collectionSequence.current ? collectionTracks.current[0]?.id : playbackListRef.current[0]?.id)
+      : undefined;
+    const nextID = forwardStackRef.current.at(-1)?.id || queued || repeatTrack || (autoplay ? radioPreview[0]?.id : undefined);
     void Playback.prefetch(playing && !trackLoading ? nextID || "" : "").catch(() => setError("couldn't get the next song ready"));
-  }, [playing, trackLoading, track?.id, queue[0]?.id, upNext, autoplay, mixTracks, forYou, popular, repeatMode, preserveForYou]);
+  }, [playing, trackLoading, track?.id, queue[0]?.id, upNext, autoplay, radioPreview, repeatMode]);
 
   useEffect(() => {
     const handleSettingsUpdate = () => {

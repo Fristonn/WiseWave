@@ -239,12 +239,12 @@ export function PlayerBar({
                         onKeyDown={(event) => {
                           if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                             event.preventDefault();
-                            music.play(item, validMixTracks, { forYou: true });
+                            music.play(item);
                             setMixOpen(false);
                           }
                         }}
                         onClick={() => {
-                          music.play(item, validMixTracks, { forYou: true });
+                          music.play(item);
                           setMixOpen(false);
                         }}
                       >
@@ -276,7 +276,7 @@ export function PlayerBar({
 
           <IconButton
             label="Shuffle queue"
-            disabled={!controllable || music.trackLoading || !(music.queue.length > 1 || music.upNext.length > 1 || music.mixTracks.length > 1)}
+            disabled={!controllable || music.trackLoading || !(music.queue.length > 1 || music.upNext.length > 1)}
             onClick={music.shuffle}
           >
             <ShuffleIcon className="control-icon" />
