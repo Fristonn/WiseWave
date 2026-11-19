@@ -54,6 +54,10 @@
 
 ## Native shell and desktop services
 
+- For a locally signed build, load `.mygo/update-keys/mygo-update.key` into the process-local `MYGO_UPDATER_PRIVATE_KEY` environment variable before running the existing packaging command. Ordinary unsigned local builds do not need the key. The app's before-quit handler marks the tray as quitting so updater restarts can close the main window.
+
+- In-app updates use the MyGo updater plugin registered in `src/app/native/windows/app.go`; Settings > About calls `TrayControl.CheckForUpdates`. The plugin owns daily background checks, download progress, signature verification, and restart prompts; its preferences live in `updater.json` under MyGo user data. `src/mygo.config.ts` pins the public key and existing release repository. The private signing key stays in ignored `.mygo/update-keys/mygo-update.key` locally and the `MYGO_UPDATER_PRIVATE_KEY` repository secret in CI. Release builds use the workflow run number as the version's patch component and publish both Windows update manifests and archives alongside installers. Preserve the signing key across releases.
+
 - `src/app/native/app.go`: stable public bootstrap entry. Keep its wrapper small.
 - `src/app/native/windows/`: app window orchestration, mini-player, tray, startup preferences, and Windows/non-Windows tray menus. These remain together because they share window lifecycle state.
 - `src/app/native/identity/`: platform application identity and Start Menu/COM integration. Preserve typed pointers and build tags.

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 )
 
 var TrayAction = mygo.NewEvent[string]("tray-action")
@@ -40,6 +41,8 @@ func (tray *TrayControl) SetWindowPreferences(minimizeToTray, miniWhenMinimized 
 }
 
 func (tray *TrayControl) StartupEnabled() bool { return mygo.App.OpenAtLogin() }
+
+func (tray *TrayControl) CheckForUpdates() { updater.CheckForUpdates() }
 
 func (tray *TrayControl) SetStartup(enabled bool) error {
 	if mygo.IsDev() {

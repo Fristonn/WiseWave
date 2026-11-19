@@ -12,6 +12,10 @@ export default defineConfig({
   devCommand: "npm run dev:web",
   buildCommand: "npm run build:web",
   frontendDist: "dist",
+  updates: {
+    publicKey: "O/7SwqOR9Z8sn8xhp/YTzxtaA5oa2pAfNna+kZbOpAI=",
+    github: "Fristonn/WiseWave",
+  },
   windows: {
     installerInclude: "resources/installer.nsh",
   },

@@ -973,6 +973,7 @@ export function Settings({
                 </details>)}</div>
               </>}
             </div> : <div className="settings-about">
+              <button type="button" disabled={!isMyGo()} onClick={() => { void TrayControl.checkForUpdates().catch(() => showSnackbar({ text: "couldn't open updates" })); }}><CircleHelp size={21} /><span><strong>check for updates</strong><small>download and install the latest version</small></span><ChevronRight size={19} /></button>
               <button type="button" onClick={() => { setShowLicenses(true); if (mainRef.current) mainRef.current.scrollTop = 0; }}><BookOpen size={21} /><span><strong>Open source licenses</strong><small>Licenses and notices for included components</small></span><ChevronRight size={19} /></button>
             </div>)}
 

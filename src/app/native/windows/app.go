@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	spotifyaccount "wisewave-runtime/desktop/accounts/Spotify"
 	"wisewave-runtime/desktop/integrations"
 	"wisewave-runtime/desktop/player"
@@ -22,6 +23,23 @@ func Run(icon []byte) {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return
 	}
+	mygo.Use(updater.New(updater.Options{
+		Icon:     icon,
+		Language: "en",
+		Strings: map[string]updater.Strings{"en": {
+			Title: "updates", MenuItem: "check for updates", Checking: "checking for updates…",
+			Cancel: "cancel", OK: "ok", UpToDate: "you're up to date",
+			UpToDateMessage: "%s %s is the latest version",
+			Unavailable:     "updates unavailable", UnavailableMessage: "%s can't update in this install location",
+			DevelopmentBuild: "updates are available in the installed app",
+			Error:            "update failed", CheckError: "couldn't check for updates", InstallError: "couldn't install the update",
+			Available: "%s update available", AvailableMessage: "%s %s is available · you're on %s",
+			ReleaseNotes: "what's new", AutomaticDownloads: "download updates automatically",
+			Skip: "skip this version", RemindLater: "remind me later", Install: "install update",
+			Downloading: "downloading update…", Installing: "installing update…",
+			Ready: "ready to restart", ReadyMessage: "%s %s is ready", Later: "later", Relaunch: "restart now",
+		}},
+	}))
 	var engine *tokens.Engine
 	music := player.NewMusicWithTokens(func(ctx context.Context, videoID, visitor string) (string, string, error) {
 		if engine == nil {
@@ -30,6 +48,9 @@ func Run(icon []byte) {
 		return engine.Tokens(ctx, videoID, visitor)
 	})
 	trayControl := &TrayControl{}
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		trayControl.quitting.Store(true)
+	})
 	mygo.App.OnSecondInstance(func([]string, string) {
 		if trayControl.window != nil {
 			if err := trayControl.Action("open"); err != nil {

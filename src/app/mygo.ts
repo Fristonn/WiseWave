@@ -511,6 +511,9 @@ export const TrayControl = {
   action(action: string): Promise<void> {
     return call("TrayControl.Action", action);
   },
+  checkForUpdates(): Promise<void> {
+    return call("TrayControl.CheckForUpdates");
+  },
   setPlayerFullscreen(enabled: boolean): Promise<void> {
     return call("TrayControl.SetPlayerFullscreen", enabled);
   },

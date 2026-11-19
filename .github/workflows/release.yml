@@ -38,7 +38,20 @@ jobs:
         run: npm ci
 
       - name: Build Windows releases
-        run: npx mygo build -platform windows/amd64,windows/arm64
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        shell: pwsh
+        run: |
+          if (-not $env:MYGO_UPDATER_PRIVATE_KEY) { throw "Missing MYGO_UPDATER_PRIVATE_KEY secret." }
+          $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
+          if ($versionSource -notmatch 'appVersion\s*=\s*"(\d+\.\d+)\.\d+"') { throw "Could not read app version." }
+          $version = "$($Matches[1]).$env:GITHUB_RUN_NUMBER"
+          Set-Content -LiteralPath "src/app/version.ts" -Value "export const appVersion = `"$version`";"
+          npx mygo build -platform windows/amd64,windows/arm64
+          if ($LASTEXITCODE -ne 0) { throw "Build failed." }
+          foreach ($architecture in @("amd64", "arm64")) {
+            if (-not (Test-Path "dist/windows-$architecture/update-windows-$architecture.json")) { throw "Missing signed update for $architecture." }
+          }
 
       - name: Upload Windows amd64 build
         uses: actions/upload-artifact@v4
@@ -95,6 +108,9 @@ jobs:
             }
           )
           $publishAssets = @($assets.FullName) + @($stableAssets.FullName)
+          $updateAssets = Get-ChildItem -LiteralPath "dist/windows-amd64","dist/windows-arm64" -File |
+            Where-Object { $_.Name -like "update-*.json" -or $_.Name -like "*.tar.gz" -or $_.Name -like "*.delta" }
+          $publishAssets += @($updateAssets.FullName)
 
           # Replace any previous rolling release. Missing release/tag is fine.
           gh release delete $tag --yes --cleanup-tag *> $null
