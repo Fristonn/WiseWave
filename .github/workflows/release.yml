@@ -85,7 +85,6 @@ jobs:
           if ($versionSource -notmatch 'appVersion\s*=\s*"(\d+\.\d+\.\d+)"') { throw "Could not read app version." }
           $version = $Matches[1]
           $updateTag = "update-v$version"
-          $bridge = $version -eq "0.2.0"
           $latestTitle = gh release view $tag --json name --jq ".name"
           if ($LASTEXITCODE -eq 0 -and $latestTitle -match '^WiseWave (\d+\.\d+\.\d+)$' -and
               [version]$Matches[1] -gt [version]$version) {
@@ -128,18 +127,16 @@ jobs:
           }
 
           $notes = "### what's new`n`n$patchNotes"
-          $publicAssets = @($installers)
-          if ($bridge) { $publicAssets += $manifests }
           gh release view $tag --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            Invoke-GitHub release upload $tag --clobber -- @publicAssets
+            Invoke-GitHub release upload $tag --clobber -- @installers
             Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
             Invoke-GitHub release edit $tag --latest --title "WiseWave $version" --notes $notes
           } else {
-            Invoke-GitHub release create $tag --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @publicAssets
+            Invoke-GitHub release create $tag --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @installers
           }
 
-          $publicNames = $publicAssets | ForEach-Object { Split-Path -Leaf $_ }
+          $publicNames = $installers | ForEach-Object { Split-Path -Leaf $_ }
           $assetNames = Invoke-GitHub release view $tag --json assets --jq ".assets[].name"
           foreach ($asset in $assetNames) {
             if ($asset -notin $publicNames) {
