@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - src/app/version.ts
   workflow_dispatch:
 
 concurrency:
@@ -43,10 +45,6 @@ jobs:
         shell: pwsh
         run: |
           if (-not $env:MYGO_UPDATER_PRIVATE_KEY) { throw "Missing MYGO_UPDATER_PRIVATE_KEY secret." }
-          $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
-          if ($versionSource -notmatch 'appVersion\s*=\s*"(\d+\.\d+)\.\d+"') { throw "Could not read app version." }
-          $version = "$($Matches[1]).$env:GITHUB_RUN_NUMBER"
-          Set-Content -LiteralPath "src/app/version.ts" -Value "export const appVersion = `"$version`";"
           npx mygo build -platform windows/amd64,windows/arm64
           if ($LASTEXITCODE -ne 0) { throw "Build failed." }
           foreach ($architecture in @("amd64", "arm64")) {
@@ -83,19 +81,17 @@ jobs:
           }
 
           $tag = "latest"
-          $short = $env:GITHUB_SHA.Substring(0, 7)
           $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
-          if ($versionSource -notmatch 'appVersion\s*=\s*"([^"]+)"') { throw "Could not read app version." }
+          if ($versionSource -notmatch 'appVersion\s*=\s*"(\d+\.\d+\.\d+)"') { throw "Could not read app version." }
           $version = $Matches[1]
-          $updateTag = "v$version"
-          $notes = @"
-          Latest WiseWave for Windows.
-
-          - [Download for Intel or AMD](https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/wisewave-setup-amd64.exe)
-          - [Download for Windows on ARM](https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/wisewave-setup-arm64.exe)
-
-          Build: $short
-          "@
+          $updateTag = "update-v$version"
+          $bridge = $version -eq "0.2.0"
+          $latestTitle = gh release view $tag --json name --jq ".name"
+          if ($LASTEXITCODE -eq 0 -and $latestTitle -match '^WiseWave (\d+\.\d+\.\d+)$' -and
+              [version]$Matches[1] -gt [version]$version) {
+            throw "Cannot replace $latestTitle with an older version."
+          }
+          $patchNotes = $null
           $installers = @()
           $manifests = @()
           $archives = @()
@@ -109,6 +105,10 @@ jobs:
             if ($metadata.version -ne $version -or $metadata.url -ne $expectedUrl -or $metadata.size -ne $archive.Length -or !$metadata.signature) {
               throw "Invalid update manifest for $architecture."
             }
+            if ([string]::IsNullOrWhiteSpace($metadata.notes) -or ($patchNotes -and $patchNotes -cne $metadata.notes)) {
+              throw "Missing or inconsistent patch notes for $architecture."
+            }
+            $patchNotes = $metadata.notes
 
             $stable = Join-Path $installer.DirectoryName "wisewave-setup-$architecture.exe"
             Copy-Item -LiteralPath $installer.FullName -Destination $stable -Force
@@ -120,12 +120,16 @@ jobs:
 
           gh release view $updateTag --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            Invoke-GitHub release upload $updateTag --clobber -- @archives
+            $publishedCommit = Invoke-GitHub api "repos/$env:GITHUB_REPOSITORY/commits/$updateTag" --jq ".sha"
+            if ($publishedCommit -ne $env:GITHUB_SHA) { throw "$version already belongs to another commit." }
+            Invoke-GitHub release upload $updateTag --clobber -- @archives @manifests
           } else {
-            Invoke-GitHub release create $updateTag --prerelease --latest=false --target $env:GITHUB_SHA --title "WiseWave $version update files" --notes "Signed files for automatic updates. Download WiseWave from the latest release." -- @archives
+            Invoke-GitHub release create $updateTag --latest=false --target $env:GITHUB_SHA --title "WiseWave $version update files" --notes $patchNotes -- @archives @manifests
           }
 
-          $publicAssets = @($installers) + @($manifests)
+          $notes = "### what's new`n`n$patchNotes"
+          $publicAssets = @($installers)
+          if ($bridge) { $publicAssets += $manifests }
           gh release view $tag --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
             Invoke-GitHub release upload $tag --clobber -- @publicAssets
@@ -135,10 +139,10 @@ jobs:
             Invoke-GitHub release create $tag --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @publicAssets
           }
 
+          $publicNames = $publicAssets | ForEach-Object { Split-Path -Leaf $_ }
           $assetNames = Invoke-GitHub release view $tag --json assets --jq ".assets[].name"
           foreach ($asset in $assetNames) {
-            if ($asset -match '^wisewave-setup-\d+\.\d+\.\d+-(amd64|arm64)\.exe$' -or
-                $asset -match '^wisewave-.*\.(tar\.gz|delta)$') {
+            if ($asset -notin $publicNames) {
               Invoke-GitHub release delete-asset $tag $asset --yes
             }
           }
