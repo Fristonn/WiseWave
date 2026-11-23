@@ -40,8 +40,8 @@ export function Lyrics({
   });
   const offset = Number.parseInt(settings.lyrOffset || "0", 10) || 0;
   const fontSize = settings.lyrSize === "Small" ? 32 : settings.lyrSize === "Large" ? 48 : 40;
-  const clockRef = useRef<PlaybackClock>(createPlaybackClock());
-  const clock = clockRef.current;
+  const [clock] = useState<PlaybackClock>(createPlaybackClock);
+  const durationSeconds = duration && duration > 0 ? duration : track?.duration_seconds || 0;
 
   useEffect(() => {
     const update = (event: Event) => setSettings((event as CustomEvent<typeof settings>).detail);
@@ -51,14 +51,15 @@ export function Lyrics({
 
   useLayoutEffect(() => {
     clock.update(
-      Math.max(0, position - offset / 1000),
-      duration || 0,
+      position,
+      durationSeconds,
       Boolean(playing),
       track?.id,
       undefined,
-      seekVersion
+      seekVersion,
+      offset
     );
-  }, [clock, position, duration, playing, track?.id, seekVersion, offset]);
+  }, [clock, position, durationSeconds, playing, track?.id, seekVersion, offset]);
 
   const plainText = useMemo(() => {
     const value = plain.trim();
@@ -68,23 +69,19 @@ export function Lyrics({
     return value.split(/\r?\n/).filter((line) => !isEmbeddedCredit(line)).join("\n").trim();
   }, [plain]);
   const lyricLines = useMemo(() => lines.filter((line) => !isEmbeddedCredit(line.text || "")), [lines]);
-  const hasTiming = lyricLines.some((line) => line.start_time_ms > 0 || line.syllables?.some((unit) => unit.start_time_ms > 0));
+  const timed = useMemo(() => {
+    if (settings.lyr === false) return [];
+    const tolerance = Math.max(3, durationSeconds * 0.02);
+    if (durationSeconds > 0 && credit?.duration && Math.abs(credit.duration - durationSeconds) > tolerance) return [];
+    const result = normalizeLyricLines(lyricLines, durationSeconds > 0 ? durationSeconds * 1000 : Infinity);
+    return result.some((line) => line.text.trim() && ((line.startTimeMs ?? 0) > 0 || line.syllables?.some((unit) => unit.startTimeMs > 0))) ? result : [];
+  }, [lyricLines, settings.lyr, durationSeconds, credit?.duration]);
   const normalized = useMemo<LyricLine[]>(() => {
-    if (settings.lyr === false || !hasTiming) {
-      const text = plainText ? plainText.split(/\r?\n/) : lyricLines.filter((line) => !line.is_background).map((line) => line.text);
-      return text.filter((line) => line?.trim()).map((text) => ({ text, startTimeMs: null }));
-    }
-    return lyricLines.length ? normalizeLyricLines(lyricLines) : plainText.split(/\r?\n/).filter((line) => line.trim()).map((text) => ({ text, startTimeMs: null }));
-  }, [lyricLines, plainText, settings.lyr, hasTiming]);
-  const hasWords = useMemo(
-    () => normalized.some((l) => l.syllables && l.syllables.length > 0),
-    [normalized]
-  );
-  const type: "SYLLABLE_SYNCED" | "LINE_SYNCED" | "PLAIN" = settings.lyr === false || !hasTiming ? "PLAIN" : hasWords
-    ? "SYLLABLE_SYNCED"
-    : lyricLines.length > 0
-    ? "LINE_SYNCED"
-    : "PLAIN";
+    if (timed.length) return timed;
+    const text = plainText ? plainText.split(/\r?\n/) : lyricLines.filter((line) => !line.is_background).map((line) => line.text);
+    return text.filter((line) => line?.trim()).map((text) => ({ text, startTimeMs: null }));
+  }, [timed, lyricLines, plainText]);
+  const type = !timed.length ? "PLAIN" : timed.some((line) => line.syllables?.length) ? "SYLLABLE_SYNCED" : "LINE_SYNCED";
 
   const handleSelect = useCallback(
     (positionMs: number) => {
@@ -108,13 +105,6 @@ export function Lyrics({
   }, [resolvedBackdrop, track?.id]);
 
   const showBlur = Boolean(backdropUrl) && !backdropFailed;
-
-  const durationSeconds =
-    typeof track?.duration_seconds === "number"
-      ? track.duration_seconds
-      : typeof track?.duration === "number"
-      ? track.duration
-      : 0;
 
   const rendererTrack = {
     trackId: track?.id || "",

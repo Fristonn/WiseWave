@@ -1,8 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ArtistDetail, Track } from "../../../mygo";
-import { loadArtist } from "../catalog/Artist";
+import { ArtistNotFoundError, loadArtist } from "../catalog/Artist";
 import { artistNames } from "./ArtistLinks";
-import { PlayerAlert } from "./PlayerAlert";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (track: Track) => void }) {
@@ -46,12 +45,12 @@ export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (trac
   useEffect(() => {
     let active = true;
     const cached = prefetched.current.get(`${artistID}\n${name}`);
-    if (cached) setArtist(cached);
+    setArtist(cached ?? null);
     setLoading(!cached);
     setFailed(false);
     setExpanded(false);
     setOverflowing(false);
-    if (cached) setImageFailed(false);
+    setImageFailed(false);
     void loadArtist(artistID, name).then(async (result) => {
       const imageURL = result.banner_url || result.artwork_url;
       if (!cached && imageURL) {
@@ -65,8 +64,8 @@ export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (trac
         setArtist(result);
         setImageFailed(false);
       }
-    }).catch(() => {
-      if (active) { setArtist(null); setFailed(true); }
+    }).catch((error: unknown) => {
+      if (active && !cached && !(error instanceof ArtistNotFoundError)) setFailed(true);
     }).finally(() => {
       if (active) setLoading(false);
     });
@@ -116,7 +115,7 @@ export function ArtistAbout({ track, onArtist }: { track: Track; onArtist: (trac
       </button>
       {artist?.monthly_listeners && <div className="now-artist-listeners">{artist.monthly_listeners}</div>}
       <div className="now-artist-about-body">
-        {failed ? <PlayerAlert message="couldn't load the artist details" onDismiss={() => {}} action={{ label: "retry", onClick: () => setRetry((value) => value + 1) }} /> : artist?.description ?
+        {failed ? <p>couldn't load the artist details</p> : artist?.description ?
           <div id={descriptionId} ref={descriptionRef} className="now-artist-description" data-expanded={expanded}>{artist.description}</div> :
           <p>no artist bio yet</p>}
       </div>

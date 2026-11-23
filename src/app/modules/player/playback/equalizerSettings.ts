@@ -5,6 +5,16 @@ export const EQ_PRESETS: Record<string, number[]> = {
   Vocal: [-1, -1, 0, 2, 3, 1],
   "Treble boost": [0, 0, 0, 0, 2, 4],
   Acoustic: [2, 1, 0, 0, 1, 2],
+  "Bass cut": [-5, -3, -1, 0, 0, 0],
+  "Treble cut": [0, 0, 0, 0, -2, -4],
+  "Hip hop": [5, 3, 0, -1, 1, 2],
+  Electronic: [4, 2, -2, -1, 2, 4],
+  Rock: [3, 1, -1, 0, 3, 2],
+  Pop: [-1, 1, 2, 2, 1, 0],
+  Jazz: [2, 1, -1, 1, 2, 3],
+  Classical: [1, 0, -1, 0, 1, 3],
+  "Spoken word": [-4, -2, 0, 2, 3, -1],
+  "Late night": [1, 0, 0, 1, 0, -3],
 };
 
 export type EqualizerSettings = { enabled: boolean; gains: number[] };

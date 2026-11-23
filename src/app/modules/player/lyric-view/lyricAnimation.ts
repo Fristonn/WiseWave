@@ -19,11 +19,32 @@ export function getLyricTop(container: HTMLElement, line: HTMLElement) {
 
 export function createLyricWords(line: LyricLine) {
   const words: Array<{ units: Array<{ text: string; start: number; end: number }>; start: number; end: number }> = [];
+  const syllables = line.syllables ?? [];
+  const countLetters = (text: string) => Math.max(1, splitLyricGraphemes(text.replace(/\s/gu, '')).length);
   let boundary = true;
   let textCursor = 0;
-  const hasMatchingText = (line.syllables ?? []).map(unit => unit.text).join('').replace(/\s/gu, '') === line.text.replace(/\s/gu, '');
-  for (const [index, syllable] of (line.syllables ?? []).entries()) {
-    const end = Math.max(syllable.startTimeMs, Math.min(syllable.endTimeMs ?? line.syllables?.[index + 1]?.startTimeMs ?? line.endTimeMs ?? syllable.startTimeMs + 150, line.syllables?.[index + 1]?.startTimeMs ?? Infinity, line.endTimeMs ?? Infinity));
+  const hasMatchingText = syllables.map(unit => unit.text).join('').replace(/\s/gu, '') === line.text.replace(/\s/gu, '');
+  let groupEndIndex = 0;
+  let groupEnd = 0;
+  let groupStart = 0;
+  let remainingLetters = 0;
+  for (const [index, syllable] of syllables.entries()) {
+    if (index === groupEndIndex) {
+      groupStart = syllable.startTimeMs;
+      groupEndIndex = index + 1;
+      while (syllables[groupEndIndex]?.startTimeMs === groupStart) groupEndIndex++;
+      const group = syllables.slice(index, groupEndIndex);
+      remainingLetters = group.reduce((total, unit) => total + countLetters(unit.text), 0);
+      const minimumDuration = Math.min(700, Math.max(150, remainingLetters * 35));
+      const suppliedEnd = group.reduce((end, unit) => Math.max(end, unit.endTimeMs ?? groupStart), groupStart);
+      const boundaryTime = Math.min(syllables[groupEndIndex]?.startTimeMs ?? Infinity, line.endTimeMs ?? Infinity);
+      groupEnd = Math.max(groupStart, Math.min(boundaryTime, Math.max(suppliedEnd, groupStart + minimumDuration)));
+    }
+    const letters = countLetters(syllable.text);
+    const start = groupStart;
+    const end = start + (groupEnd - start) * letters / remainingLetters;
+    groupStart = end;
+    remainingLetters -= letters;
     let syllableText = syllable.text;
     if (hasMatchingText) {
       const start = textCursor;
@@ -35,7 +56,10 @@ export function createLyricWords(line: LyricLine) {
       while (textCursor < line.text.length && /\s/u.test(line.text[textCursor])) textCursor++;
       syllableText = line.text.slice(start, textCursor);
     }
-    for (const text of syllableText.match(/\s+|[^\s]+/gu) ?? []) {
+    const pieces = syllableText.match(/\s+|[^\s]+/gu) ?? [];
+    const totalLetters = pieces.reduce((total, piece) => total + (piece.trim() ? countLetters(piece) : 0), 0);
+    let pieceStart = start;
+    for (const text of pieces) {
       if (/^\s+$/u.test(text)) {
         const word = words.at(-1);
         if (word) word.units.at(-1)!.text += text;
@@ -44,11 +68,13 @@ export function createLyricWords(line: LyricLine) {
       }
       let word = words.at(-1);
       if (!word || boundary || /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text)) {
-        word = { units: [], start: syllable.startTimeMs, end: 0 };
+        word = { units: [], start: pieceStart, end: 0 };
         words.push(word);
       }
-      word.units.push({ text, start: syllable.startTimeMs, end });
-      word.end = end;
+      const pieceEnd = pieceStart + (end - start) * countLetters(text) / totalLetters;
+      word.units.push({ text, start: pieceStart, end: pieceEnd });
+      word.end = pieceEnd;
+      pieceStart = pieceEnd;
       boundary = false;
     }
   }
@@ -93,12 +119,12 @@ export function findActiveLyricIndex(lines: LyricLine[], position: number, endTi
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
     const start = line.startTimeMs ?? Infinity;
-    if (start > position) return index;
+    if (start > position) break;
     const end = endTimes?.[index] ?? Math.max(line.endTimeMs ?? lines[index + 1]?.startTimeMs ?? Infinity,
       ...(line.accompanimentLines ?? []).map(background => background.endTimeMs ?? background.syllables?.at(-1)?.endTimeMs ?? 0));
     if (position < end) return index;
   }
-  return lines.length - 1;
+  return -1;
 }
 
 interface MeasuredUnit {

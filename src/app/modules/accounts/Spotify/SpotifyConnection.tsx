@@ -1,4 +1,5 @@
 import { reportAccountImport } from "../shared/ImportProgress";
+import { spotifyCard } from "../shared/accountCards";
 import { accountText } from "../shared/accountText";
 import { feedbackText } from "../../../shared/feedbackText";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -6,6 +7,7 @@ import { AccountLibraryDialog } from "../shared/AccountLibraryDialog";
 import { X } from "lucide-react";
 import { SpotifyAccount, SpotifyLogin, events, type SpotifySyncStatus, type SpotifyImportResult } from "../../../mygo";
 import { Classic } from "../../../shared/ui/Classic";
+import { Artwork } from "../../../shared/ui/Artwork";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import { PlayerAlert } from "../../player/shared/PlayerAlert";
 import spotifyLikedSongsArt from "../../../../../resources/images/liked-songs.png";
@@ -20,33 +22,39 @@ export function SpotifyIcon({ size = 18 }: { size?: number }) {
 export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:SpotifyImportResult)=>number}) {
  const [note,setNote]=useState("");
  const dismissNote=useCallback(()=>setNote(""),[]);
-  const [spotifyLinked, setSpotifyLinked] = useState(false);
-  const [spotifyName, setSpotifyName] = useState("");
-  const [spotifyAvatar, setSpotifyAvatar] = useState("");
+  const [spotifyLinked, setSpotifyLinked] = useState<boolean | null>(() => spotifyCard.getAccount()?.linked ?? null);
+  const [spotifyName, setSpotifyName] = useState(() => spotifyCard.getAccount()?.display_name || "");
+  const [spotifyAvatar, setSpotifyAvatar] = useState(() => spotifyCard.getAccount()?.image_url || "");
   const [spotifyBusy, setSpotifyBusy] = useState(false);
   const [spotifyCancelling, setSpotifyCancelling] = useState(false);
-  const [spotifySync, setSpotifySync] = useState<SpotifySyncStatus | null>(null);
+  const [spotifySync, setSpotifySync] = useState<SpotifySyncStatus | null>(spotifyCard.getSync);
   const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
   const [spotifyModalClosing, setSpotifyModalClosing] = useState(false);
   const [spotifyImportingId, setSpotifyImportingId] = useState<string | null>(null);
   const spotifyModalTimer = useRef<number | null>(null);
   const spotifyModalOpenRef = useRef(false);
-  const spotifyWasLinkedRef = useRef<boolean | null>(null);
+  const spotifyWasLinkedRef = useRef(spotifyLinked);
   useEffect(() => {
     spotifyModalOpenRef.current = spotifyModalOpen;
   }, [spotifyModalOpen]);
 
   useEffect(() => {
+    let active = true;
+    let accountVersion = 0;
+    let syncVersion = 0;
     const syncSpotify = () => {
+      const accountRequest = ++accountVersion;
+      const syncRequest = ++syncVersion;
       void SpotifyAccount.status().then((status) => {
+        if (!active || accountRequest !== accountVersion) return;
         const linked = Boolean(status?.linked);
         setSpotifyLinked(linked);
         setSpotifyName(status?.display_name || "");
         setSpotifyAvatar(status?.image_url || "");
         if (spotifyWasLinkedRef.current === null) spotifyWasLinkedRef.current = linked;
-      }).catch(() => {});
+      }).catch(() => { if (active && accountRequest === accountVersion) setSpotifyLinked((linked) => linked ?? false); });
       void SpotifyAccount.syncStatus().then((status) => {
-        setSpotifySync(status);
+        if (active && syncRequest === syncVersion) setSpotifySync(status);
       }).catch(() => {});
       void SpotifyLogin.busy().then(setSpotifyBusy).catch(() => setSpotifyBusy(false));
     };
@@ -57,6 +65,9 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
       syncSpotify();
       const wasLinked = spotifyWasLinkedRef.current;
       if (!linked) {
+        setSpotifyLinked(false);
+        setSpotifyName("");
+        setSpotifyAvatar("");
         setSpotifyModalOpen(false);
         setSpotifySync(null);
         setSpotifyImportingId(null);
@@ -68,6 +79,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
       }
     });
     const offSync = events.spotifyLibrarySyncChanged.on((status) => {
+      syncVersion++;
       setSpotifySync(status);
       if (status?.display_name) setSpotifyName(status.display_name);
       if (status?.image_url) setSpotifyAvatar(status.image_url);
@@ -90,6 +102,7 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
       void SpotifyLogin.busy().then(setSpotifyBusy).catch(() => {});
     }, 1000);
     return () => {
+      active = false;
       offAccount();
       offSync();
       offImport();
@@ -148,12 +161,12 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
 
  useEffect(()=>()=>{if(spotifyModalTimer.current!==null)window.clearTimeout(spotifyModalTimer.current)},[]);
  return <><div className="settings-account">
-                {spotifyLinked ? (
+                {spotifyLinked === null ? null : spotifyLinked ? (
                   <div className="settings-account-card is-linked">
                     <div className="settings-account-identity">
                       <div className="settings-account-avatar-wrap">
                         {spotifyAvatar ? (
-                          <img className="settings-account-avatar" src={spotifyAvatar} alt="" width={72} height={72} />
+                          <Artwork className="settings-account-avatar" src={spotifyAvatar} size={72} />
                         ) : (
                           <span className="settings-account-avatar is-fallback" aria-hidden="true">{(spotifyName || "S").slice(0, 1)}</span>
                         )}

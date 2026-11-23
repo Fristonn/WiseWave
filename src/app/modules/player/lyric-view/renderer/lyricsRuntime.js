@@ -2679,21 +2679,20 @@ class LyricsRuntime extends ReactiveElement {
     } else {
       this.clearProgressiveBlurLine();
     }
-    const predictiveTime = this.currentTime + scrollLookAheadMs;
-    const predictiveActiveIndices = this.findActiveLineIndices(predictiveTime);
+    const activeIndices = this.findActiveLineIndices(this.currentTime);
     let targetElement = null;
     let targetLineIndex = null;
-    if (predictiveActiveIndices.length > 0) {
+    if (activeIndices.length > 0) {
       targetLineIndex = this.getPrimaryScrollLineIndex(
-        predictiveActiveIndices,
-        predictiveTime,
+        activeIndices,
+        this.currentTime,
       );
       if (targetLineIndex !== null && targetLineIndex !== -1) {
         targetElement = this._getLineElement(targetLineIndex);
       }
     }
     if (!targetElement) {
-      targetLineIndex = this.getLineIndexAtTime(predictiveTime, 0);
+      targetLineIndex = this.getLineIndexAtTime(this.currentTime, 0);
       if (targetLineIndex !== null && targetLineIndex !== -1) {
         targetElement = this._getLineElement(targetLineIndex);
       }
@@ -2720,8 +2719,8 @@ class LyricsRuntime extends ReactiveElement {
     const layoutChanged = this.setBackgroundExpandedLine(
       targetElement,
       true,
-      predictiveActiveIndices,
-      predictiveTime,
+      activeIndices,
+      this.currentTime,
     );
     this.focusLine(targetElement, forceScroll || layoutChanged, scrollDuration);
     if (this.pendingLayoutOffsets.size)

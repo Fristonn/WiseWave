@@ -92,7 +92,9 @@ function buildLines(lines: LyricLine[], wordSynced: boolean, duration: number): 
       normalized.push(line);
       continue;
     }
-    const empty = { ...line, endTimeMs: lines[index + 1]?.startTimeMs ?? duration };
+    const nextStart = lines[index + 1]?.startTimeMs;
+    const endTimeMs = nextStart != null && nextStart > (line.startTimeMs ?? 0) ? nextStart : line.endTimeMs || duration;
+    const empty = { ...line, endTimeMs };
     const previous = normalized[normalized.length - 1];
     if (previous && !previous.text.trim()) {
       previous.endTimeMs = empty.endTimeMs;
@@ -124,7 +126,7 @@ function buildLines(lines: LyricLine[], wordSynced: boolean, duration: number): 
       oppositeTurn: false,
       timestamp: line.startTimeMs ?? 0,
       endtime: end,
-      isWordSynced: wordSynced,
+      isWordSynced: wordSynced && Boolean(line.syllables?.length),
     };
   });
 }

@@ -13,7 +13,7 @@ export function usePlaylistMenu() {
   return open;
 }
 
-export function DeleteConfirmation({ title, description, onCancel, onConfirm }: { title: string; description: ReactNode; onCancel: () => void; onConfirm: () => void }) {
+export function DeleteConfirmation({ title, description, confirmLabel = "Delete", onCancel, onConfirm }: { title: string; description: ReactNode; confirmLabel?: string; onCancel: () => void; onConfirm: () => void }) {
   const dialog = useRef<HTMLDivElement>(null);
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
@@ -35,7 +35,7 @@ export function DeleteConfirmation({ title, description, onCancel, onConfirm }: 
     <div className="playlist-delete-dialog" ref={dialog} role="alertdialog" aria-modal="true" aria-labelledby="playlist-delete-title" aria-describedby="playlist-delete-description">
       <h2 id="playlist-delete-title">{title}</h2>
       <p id="playlist-delete-description">{description}</p>
-      <div className="playlist-delete-actions"><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={onConfirm}>Delete</button></div>
+      <div className="playlist-delete-actions"><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={onConfirm}>{confirmLabel}</button></div>
     </div>
   </div>, document.body);
 }

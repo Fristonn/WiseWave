@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { SettingsDropdown } from "./SettingsDropdown";
 import { EQ_BANDS, EQ_PRESETS, readEqualizer, saveEqualizer, type EqualizerSettings } from "../player/playback/equalizerSettings";
 
-export function Equalizer() {
+const presetOptions = Object.keys(EQ_PRESETS).map((name) => ({ value: name, label: name }));
+
+export function Equalizer({ presetsOpen, onPresetsOpenChange }: { presetsOpen: boolean; onPresetsOpenChange: (open: boolean) => void }) {
   const [settings, setSettings] = useState(readEqualizer);
   useEffect(() => {
     const sync = (event: Event) => setSettings((event as CustomEvent<EqualizerSettings>).detail);
@@ -13,12 +16,16 @@ export function Equalizer() {
     setSettings(next);
     saveEqualizer(next);
   };
-  const preset = Object.entries(EQ_PRESETS).find(([, gains]) => gains.every((gain, index) => gain === settings.gains[index]))?.[0] || "Custom";
+  const preset = Object.entries(EQ_PRESETS).find(([, gains]) => gains.every((gain, index) => gain === settings.gains[index]))?.[0] ?? "";
   const points = settings.gains.map((gain, index) => `${index * 100 + 50},${100 - gain * 8}`).join(" ");
   return <section className="settings-equalizer" aria-label="Equalizer">
     <div className="settings-equalizer-heading"><b>Equalizer</b><button type="button" className="settings-tog" role="switch" aria-label="Equalizer" aria-checked={settings.enabled} onClick={() => update(!settings.enabled, settings.gains)} /></div>
     <div className="settings-equalizer-panel">
-      <label className="settings-equalizer-preset">Presets <select value={preset} onChange={(event) => update(settings.enabled, [...EQ_PRESETS[event.target.value]])}><option value="Custom" disabled>Custom</option>{Object.keys(EQ_PRESETS).map((name) => <option key={name}>{name}</option>)}</select></label>
+      <div className="settings-equalizer-preset">
+        <span>Presets</span>
+        <SettingsDropdown label="Equalizer presets" value={preset} displayValue={preset || "Choose a preset"} options={presetOptions}
+          open={presetsOpen} onOpenChange={onPresetsOpenChange} onSelect={(option) => update(settings.enabled, [...EQ_PRESETS[option]])} />
+      </div>
       <div className="settings-equalizer-chart">
         <span className="settings-equalizer-high">+12 dB</span><span className="settings-equalizer-low">−12 dB</span>
         <div className="settings-equalizer-plot">

@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo/audio"
 	"github.com/fgn/puropus"
 	"wisewave-runtime/internal/innertube"
+	"wisewave-runtime/internal/models"
 )
 
 type Playback struct {
@@ -69,14 +70,30 @@ func NewPlayback(music *Music) *Playback {
 	return p
 }
 
-func (p *Playback) Play(id string) error { return p.load(id, 0, true) }
+func trackCacheDetails(track models.Track) CachedSong {
+	return CachedSong{ID: track.ID, Title: track.Title, Artist: track.Artist, Artwork: track.AlbumArtURL}
+}
+
+func (p *Playback) Play(id string) error { return p.load(id, 0, true, CachedSong{}) }
+func (p *Playback) PlayTrack(track models.Track) error {
+	return p.load(track.ID, 0, true, trackCacheDetails(track))
+}
+
 func (p *Playback) Prepare(id string, position float64) error {
+	return p.prepare(id, position, CachedSong{})
+}
+
+func (p *Playback) PrepareTrack(track models.Track, position float64) error {
+	return p.prepare(track.ID, position, trackCacheDetails(track))
+}
+
+func (p *Playback) prepare(id string, position float64, song CachedSong) error {
 	if math.IsNaN(position) || math.IsInf(position, 0) {
 		return errors.New("Invalid playback position")
 	}
-	return p.load(id, max(0, min(position, 86400)), false)
+	return p.load(id, max(0, min(position, 86400)), false, song)
 }
-func (p *Playback) load(id string, position float64, start bool) error {
+func (p *Playback) load(id string, position float64, start bool, song CachedSong) error {
 	if !validTrackID(id) {
 		return errors.New("Invalid track")
 	}
@@ -178,6 +195,7 @@ func (p *Playback) load(id string, position float64, start bool) error {
 		}
 	}
 	if !local && cached != nil {
+		p.audioCache.rememberDetails(id, song)
 		sb = newStreamBuffer(io.NopCloser(bytes.NewReader(cached.data)), cancel, int64(len(cached.data)), cached.bitrate, cached.duration, nil)
 		var err error
 		decoder, err = newOpus(sb)
@@ -264,7 +282,7 @@ func (p *Playback) load(id string, position float64, start bool) error {
 				decoder, err = newM4AAACDecoder(data)
 			}
 		} else {
-			sb = newStreamBuffer(innertube.WrapIfSABR(response), cancel, response.ContentLength, bitrate, duration, func(data []byte) { p.storeAudio(id, data, bitrate, duration) })
+			sb = newStreamBuffer(innertube.WrapIfSABR(response), cancel, response.ContentLength, bitrate, duration, func(data []byte) { p.storeAudio(id, data, bitrate, duration, song) })
 			decoder, err = newOpus(sb)
 		}
 		if err != nil {
@@ -464,7 +482,7 @@ func (p *Playback) SetNormalize(enable bool) {
 	}
 }
 
-func (p *Playback) storeAudio(id string, data []byte, bitrate int, duration time.Duration) {
+func (p *Playback) storeAudio(id string, data []byte, bitrate int, duration time.Duration, song CachedSong) {
 	if p.audioCache == nil {
 		return
 	}
@@ -479,7 +497,7 @@ func (p *Playback) storeAudio(id string, data []byte, bitrate int, duration time
 	if bitrate <= 0 && duration > 0 {
 		bitrate = int(float64(len(data)*8) / duration.Seconds())
 	}
-	if err := p.audioCache.put(id, data, bitrate, duration); err != nil {
+	if err := p.audioCache.put(id, data, bitrate, duration, song); err != nil {
 		log.Printf("write audio cache for %s: %v", id, err)
 	}
 }
@@ -497,6 +515,14 @@ func (p *Playback) resolveStream(ctx context.Context, id string) (*innertube.Res
 }
 
 func (p *Playback) Prefetch(id string) {
+	p.prefetch(id, CachedSong{})
+}
+
+func (p *Playback) PrefetchTrack(track models.Track) {
+	p.prefetch(track.ID, trackCacheDetails(track))
+}
+
+func (p *Playback) prefetch(id string, song CachedSong) {
 	p.mu.Lock()
 	if p.prefetchID == id {
 		p.mu.Unlock()
@@ -535,6 +561,7 @@ func (p *Playback) Prefetch(id string) {
 				}
 			}
 			if cached != nil {
+				p.audioCache.rememberDetails(id, song)
 				return
 			}
 		}
@@ -571,7 +598,7 @@ func (p *Playback) Prefetch(id string) {
 		if ctx.Err() != nil || len(data) == 128<<20 {
 			return
 		}
-		p.storeAudio(id, data, stream.Bitrate, time.Duration(stream.DurationMs)*time.Millisecond)
+		p.storeAudio(id, data, stream.Bitrate, time.Duration(stream.DurationMs)*time.Millisecond, song)
 	}()
 }
 

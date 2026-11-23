@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { isMyGo } from "mygo-runtime";
-import { Discord, Playback, TrayControl, events, type CachedSong, type DiscordProfile, type SpotifyImportResult, type YouTubeImportResult, type Track } from "../../mygo";
-import { Artwork, preferredArtworkURL } from "../../shared/ui/Artwork";
+import { Discord, Playback, TrayControl, events, type DiscordProfile, type SpotifyImportResult, type YouTubeImportResult, type Track } from "../../mygo";
+import { preferredArtworkURL } from "../../shared/ui/Artwork";
 import { Classic } from "../../shared/ui/Classic";
 import { MarqueeText } from "../../shared/ui/MarqueeText";
 import { PlayerAlert } from "../player/shared/PlayerAlert";
+import { clearSearchHistory } from "../player/search/SearchBox";
 import { useSnackbar } from "../../shared/ui/Snackbar";
-import { AudioLines, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, ExternalLink, LockKeyhole, Mic2, Palette, Search, X } from "lucide-react";
+import { AudioLines, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, ExternalLink, LockKeyhole, Mic2, Palette, RefreshCw, Search, X } from "lucide-react";
+import { appVersion } from "../../version";
 import appIcon from "../../../../resources/images/icon.png";
 import lyricsLicense from "../../../../resources/licenses/accompanist-lyrics-license.txt?raw";
 import lyricsNotice from "../../../../resources/licenses/accompanist-lyrics-notice.txt?raw";
@@ -25,6 +27,7 @@ import { ProgressStylePreview } from "../player/playback/ProgressStylePreview";
 import { PROGRESS_STYLES, readProgressStyle, type ProgressStyle } from "../player/playback/progressStyle";
 import { readZoom, setZoom, ZOOM_LEVELS } from "../../shared/zoom";
 import { Equalizer } from "./Equalizer";
+import { SettingsDropdown } from "./SettingsDropdown";
 import { DeleteConfirmation } from "../player/library/PlaylistMenu";
 import { YouTubeConnection, YouTubeIcon } from "../accounts/YouTube/YouTubeConnection";
 import { SpotifyConnection, SpotifyIcon } from "../accounts/Spotify/SpotifyConnection";
@@ -78,7 +81,6 @@ export interface SettingsProps {
   duration?: number;
   onImportSpotify?: (result: SpotifyImportResult) => number;
   onImportYouTube?: (result: YouTubeImportResult) => number;
-  knownTracks?: Track[];
 }
 
 const DEFAULT_SETTINGS = {
@@ -118,6 +120,12 @@ const DEFAULT_SETTINGS = {
 };
 
 type SettingsState = typeof DEFAULT_SETTINGS;
+
+const clearConfirmations = {
+  hist: { title: "Clear recently played songs?", description: "This will remove the songs from your recently played list." },
+  searchHistory: { title: "Clear recent searches?", description: "This will remove the searches saved in WiseWave." },
+  cache: { title: "Clear cached songs?", description: "This will remove temporarily cached songs. Your downloads won't be affected." },
+};
 
 interface SettingRowDef {
   k?: keyof SettingsState;
@@ -182,6 +190,7 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
       {
         h: "Player",
         r: [
+          { k: "resume", l: "Resume playback", d: "Pick up where you left off after restarting WiseWave.", t: "tog" },
           {
             k: "progressStyle",
             l: "Progress style",
@@ -195,7 +204,6 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
         h: "Queue",
         r: [
           { k: "auto", l: "Autoplay similar music", d: "Keep playing when your queue ends.", t: "tog" },
-          { k: "resume", l: "Resume where you left off", t: "tog" },
         ],
       },
     ],
@@ -243,24 +251,6 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
       },
     ],
   },
-  library: {
-    t: "Library",
-    g: [
-      {
-        h: "Saved music",
-        r: [
-          { k: "resume", l: "Resume playback", d: "Pick up where you left off after restarting WiseWave.", t: "tog" },
-          { l: "Songs saved for quick playback", d: "See songs kept temporarily to play faster.", a: "cache", b: "View", t: "btn" },
-        ],
-      },
-      {
-        h: "Maintenance",
-        r: [
-          { l: "Clear recently played songs", d: "Remove your recently played songs.", a: "hist", b: "Clear", t: "btn" },
-        ],
-      },
-    ],
-  },
   discord: {
     t: "Discord",
     pre: "discord",
@@ -280,12 +270,19 @@ const SETTINGS_SECTIONS: Record<string, SettingSectionDef> = {
     g: [],
   },
   privacy: {
-    t: "Privacy",
+    t: "Data Controls",
     g: [
       {
-        h: "Your data",
+        h: "History",
         r: [
           { l: "Clear recently played songs", d: "Remove your recently played songs.", a: "hist", b: "Clear", t: "btn" },
+          { l: "Clear recent searches", d: "Remove the searches saved in WiseWave.", a: "searchHistory", b: "Clear", t: "btn" },
+        ],
+      },
+      {
+        h: "Playback cache",
+        r: [
+          { l: "Songs saved for quick playback", d: "Songs kept temporarily for faster playback.", a: "cache", b: "Clear cache", t: "btn" },
         ],
       },
     ],
@@ -308,7 +305,7 @@ const LICENSES = [
 ];
 
 const NAV_GROUPS = [
-  ["Music", ["appearance", "playback", "lyrics", "library"]],
+  ["Music", ["appearance", "playback", "lyrics"]],
   ["Connect", ["youtube", "spotify", "discord"]],
   ["System", ["privacy", "about"]],
 ] as const;
@@ -322,51 +319,7 @@ function DiscordIcon({ size = 18 }: { size?: number }) {
 }
 
 
-const NAV_ICONS = { appearance: Palette, playback: AudioLines, lyrics: Mic2, library: BookOpen, spotify: SpotifyIcon, youtube: YouTubeIcon, discord: DiscordIcon, privacy: LockKeyhole, about: CircleHelp };
-
-function CachedSongs({ knownTracks, revision, onEmptyChange }: { knownTracks: Track[]; revision: number; onEmptyChange: (empty: boolean) => void }) {
-  const [songs, setSongs] = useState<CachedSong[] | null>(null);
-  const [details, setDetails] = useState<Map<string, { title: string; artist: string; artwork: string }>>(() => new Map(knownTracks.map((item) => [item.id, { title: item.title, artist: item.artist, artwork: item.album_art_url }])));
-  const [error, setError] = useState(false);
-  const [resolvingDetails, setResolvingDetails] = useState(true);
-
-  useEffect(() => {
-    onEmptyChange(songs !== null && songs.length === 0 && !error);
-  }, [songs, error, onEmptyChange]);
-
-  useEffect(() => {
-    if (!isMyGo()) return;
-    return events.cacheClearProgressChanged.on((next) => {
-      if (next.deleted_id) setSongs((current) => current?.filter((song) => song.id !== next.deleted_id) ?? null);
-    });
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setResolvingDetails(true);
-    void Playback.listCachedSongs().then((items) => {
-      if (!cancelled) setSongs(items || []);
-    }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setResolvingDetails(false); });
-    return () => { cancelled = true; };
-  }, [revision]);
-
-  const unknownCount = songs?.filter((item) => !details.get(item.id)?.title).length || 0;
-
-  return <div className="settings-cached-songs player-scroll">
-    {error ? <p role="status">couldn't load cached songs</p> : songs === null ? <p role="status">loading cached songs…</p> : songs.length === 0 ? <p role="status">no songs saved for quick playback yet</p> : <>
-      <p className="settings-cached-count">{songs.length} {songs.length === 1 ? "song" : "songs"} using {(songs.reduce((total, item) => total + item.size, 0) / 1048576).toFixed(1)} MB of space</p>
-      <div className="settings-cached-list">{songs.filter((item) => Boolean(details.get(item.id)?.title)).map((item) => {
-        const song = details.get(item.id)!;
-        return <div className="settings-cached-item" key={item.id}>
-          <Artwork src={song.artwork || ""} size={48} className="settings-cached-art" lazy />
-          <span className="settings-cached-copy"><strong><MarqueeText>{song.title}</MarqueeText></strong><small><MarqueeText>{song.artist}</MarqueeText></small></span>
-          <small>{(item.size / 1048576).toFixed(1)} MB</small>
-        </div>;
-      })}</div>
-      {!resolvingDetails && unknownCount > 0 && <p className="settings-cached-count">{unknownCount} more {unknownCount === 1 ? "song is" : "songs are"} saved too, but their details aren't available.</p>}
-    </>}
-  </div>;
-}
+const NAV_ICONS = { appearance: Palette, playback: AudioLines, lyrics: Mic2, spotify: SpotifyIcon, youtube: YouTubeIcon, discord: DiscordIcon, privacy: LockKeyhole, about: CircleHelp };
 
 export function Settings({
   onClose,
@@ -383,7 +336,6 @@ export function Settings({
   duration = 0,
   onImportSpotify,
   onImportYouTube,
-  knownTracks = [],
 }: SettingsProps) {
   const currentPosition = position;
   const currentDuration = duration;
@@ -414,15 +366,21 @@ export function Settings({
   const [activeSection, setActiveSection] = useState<string>("appearance");
   const [discordProfile, setDiscordProfile] = useState<DiscordProfile | null>(null);
   const [showLicenses, setShowLicenses] = useState(false);
-  const [showCachedSongs, setShowCachedSongs] = useState(false);
-  const [cachedSongsEmpty, setCachedSongsEmpty] = useState(false);
-  const [confirmClearCache, setConfirmClearCache] = useState(false);
+  const [clearTarget, setClearTarget] = useState<keyof typeof clearConfirmations | null>(null);
   const [clearingCache, setClearingCache] = useState(false);
   const [cacheRevision, setCacheRevision] = useState(0);
-  const [cachedSongsClosing, setCachedSongsClosing] = useState(false);
-  const cachedSongsTimer = useRef<number | null>(null);
+  const [cacheCount, setCacheCount] = useState<number | "error" | null>(null);
   const [showLyricsSources, setShowLyricsSources] = useState(false);
   const [query, setQuery] = useState("");
+  const showCacheCount = activeSection === "privacy" || Boolean(query.trim());
+  useEffect(() => {
+    if (!showCacheCount || !isMyGo()) return;
+    let active = true;
+    void Playback.cachedSongCount().then((count) => {
+      if (active) setCacheCount(count);
+    }).catch(() => { if (active) setCacheCount("error"); });
+    return () => { active = false; };
+  }, [showCacheCount, cacheRevision]);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [startupMode, setStartupMode] = useState<string | null>(null);
   const [savingStartup, setSavingStartup] = useState(false);
@@ -430,7 +388,6 @@ export function Settings({
   const [progressPickerClosing, setProgressPickerClosing] = useState(false);
   const progressPickerTimer = useRef<number | null>(null);
   const [note, setNote] = useState<string>("");
-  const [confirmHistory, setConfirmHistory] = useState(false);
   const dismissNote = useCallback(() => setNote(""), []);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef<number | null>(null);
@@ -438,9 +395,45 @@ export function Settings({
   onCloseRef.current = onClose;
   const mainRef = useRef<HTMLElement | null>(null);
   const showSnackbar = useSnackbar();
+  const [openingUpdater, setOpeningUpdater] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState("");
+  const updateRequest = useRef<Promise<string> | null>(null);
+  const canCheckForUpdates = isMyGo();
+  const refreshUpdateStatus = useCallback(() => {
+    if (updateRequest.current) return updateRequest.current;
+    const request = TrayControl.updateStatus()
+      .catch(() => "error")
+      .then((status) => { setUpdateStatus(status); return status; })
+      .finally(() => { updateRequest.current = null; });
+    updateRequest.current = request;
+    return request;
+  }, []);
+
+  useEffect(() => {
+    if (canCheckForUpdates && activeSection === "about" && !showLicenses && !query.trim()) {
+      void refreshUpdateStatus();
+    }
+  }, [activeSection, canCheckForUpdates, query, refreshUpdateStatus, showLicenses]);
+
+  const updateStatusText = !canCheckForUpdates || updateStatus === "unavailable"
+    ? "update checks are unavailable in this build"
+    : updateStatus === "current" ? "You’re up to date"
+    : updateStatus === "available" ? "Update available"
+    : updateStatus === "error" ? "couldn't check for updates"
+    : "Checking for updates…";
+
+  const checkForUpdates = async () => {
+    setOpeningUpdater(true);
+    try {
+      if (await refreshUpdateStatus() === "available") await TrayControl.checkForUpdates();
+    } catch {
+      showSnackbar({ text: "couldn't open the update window" });
+    } finally {
+      setOpeningUpdater(false);
+    }
+  };
 
   const clearCache = async () => {
-    setConfirmClearCache(false);
     setClearingCache(true);
     showSnackbar({ key: "clear-audio-cache", text: "clearing saved songs", loading: true, duration: -2 });
     try {
@@ -454,20 +447,6 @@ export function Settings({
     }
   };
 
-  useLayoutEffect(() => {
-    const main = mainRef.current;
-    const button = main?.querySelector<HTMLElement>('.settings-ddb[aria-expanded="true"]');
-    const menu = button?.parentElement?.querySelector<HTMLElement>(".settings-dd-menu");
-    if (!main || !button || !menu) return;
-    const bounds = main.getBoundingClientRect();
-    const anchor = button.getBoundingClientRect();
-    const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-    const below = (bounds.bottom - anchor.bottom) / zoom - 8;
-    const above = (anchor.top - bounds.top) / zoom - 8;
-    const openAbove = below < menu.offsetHeight && above > below;
-    menu.dataset.above = String(openAbove);
-    menu.style.maxHeight = `${Math.max(0, Math.min(240, openAbove ? above : below))}px`;
-  }, [openDropdown]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -563,19 +542,11 @@ export function Settings({
     root.dataset.motion = st.motion ? "reduce" : "";
   }, []);
 
-  const handleAction = (actKey?: string) => {
-    if (actKey === "cache") {
-      setCachedSongsEmpty(false);
-      setShowCachedSongs(true);
-      return;
-    }
-    if (actKey === "hist") {
-      if (!confirmHistory) { setConfirmHistory(true); return; }
-      setConfirmHistory(false);
-      setNote(onClearHistory() ? "recently played songs cleared" : "couldn't clear your recently played songs");
-      return;
-    }
-    setNote("that isn't available yet");
+  const confirmClear = () => {
+    setClearTarget(null);
+    if (clearTarget === "cache") void clearCache();
+    else if (clearTarget === "hist") setNote(onClearHistory() ? "recently played songs cleared" : "couldn't clear your recently played songs");
+    else if (clearTarget === "searchHistory") setNote(clearSearchHistory() ? "recent searches cleared" : "couldn't clear your recent searches");
   };
 
   const closeSettings = () => {
@@ -602,24 +573,9 @@ export function Settings({
     }, 150);
   };
 
-  const closeCachedSongs = () => {
-    if (cachedSongsTimer.current !== null) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce") {
-      setShowCachedSongs(false);
-      return;
-    }
-    setCachedSongsClosing(true);
-    cachedSongsTimer.current = window.setTimeout(() => {
-      setShowCachedSongs(false);
-      setCachedSongsClosing(false);
-      cachedSongsTimer.current = null;
-    }, 150);
-  };
-
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     if (progressPickerTimer.current !== null) window.clearTimeout(progressPickerTimer.current);
-    if (cachedSongsTimer.current !== null) window.clearTimeout(cachedSongsTimer.current);
   }, []);
 
   useEffect(() => {
@@ -630,8 +586,7 @@ export function Settings({
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (showCachedSongs) closeCachedSongs();
-        else if (progressPickerOpen) closeProgressPicker();
+        if (progressPickerOpen) closeProgressPicker();
         else if (openDropdown) setOpenDropdown(null);
         else closeSettings();
       }
@@ -642,7 +597,7 @@ export function Settings({
       document.removeEventListener("click", handleDocumentClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [openDropdown, progressPickerOpen, showCachedSongs]);
+  }, [openDropdown, progressPickerOpen]);
 
   const isDimmed = (dep?: keyof SettingsState) => {
     if (!dep) return false;
@@ -708,78 +663,24 @@ export function Settings({
       }
 
       case "dd": {
-        const isOpen = openDropdown === r.k;
-        return (
-          <div className="settings-dd">
-            <button
-              type="button"
-              className="settings-ddb"
-              aria-haspopup="listbox"
-              aria-expanded={isOpen}
-              aria-label={r.l}
-              aria-busy={r.k === "startup" && (startupMode === null || savingStartup)}
-              disabled={r.k === "startup" && (startupMode === null || startupMode === "Unavailable" || savingStartup)}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                  event.preventDefault();
-                  setOpenDropdown(r.k as string);
-                  const control = event.currentTarget.parentElement;
-                  requestAnimationFrame(() => control?.querySelector<HTMLButtonElement>("[aria-selected=true]")?.focus({ preventScroll: true }));
-                }
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenDropdown(isOpen ? null : (r.k as string));
-              }}
-            >
-              <span className="ddl">{r.k === "startup" ? val === null ? "checking…" : val === "Unavailable" ? "unavailable" : val : r.k === "lyrStyle" ? val === "Focus" ? "Line Focus" : "Word Flow" : String(val)}</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
-            {isOpen && (
-              <ul className="settings-dd-menu" role="listbox" aria-label={r.l} onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.stopPropagation();
-                  setOpenDropdown(null);
-                  (event.currentTarget.previousElementSibling as HTMLButtonElement | null)?.focus();
-                } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                  event.preventDefault();
-                  const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
-                  const index = options.indexOf(document.activeElement as HTMLButtonElement);
-                  options[(index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length]?.focus();
-                }
-              }}>
-                {r.o?.map((opt) => (
-                  <li key={opt}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={opt === val}
-                      onClick={() => {
-                        if (r.k) updateSetting(r.k, opt as any);
-                        (document.activeElement as HTMLElement | null)?.closest(".settings-dd")?.querySelector<HTMLButtonElement>(".settings-ddb")?.focus();
-                        setOpenDropdown(null);
-                      }}
-                    >
-                      {r.k === "lyrStyle" ? (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-                          <span style={{ fontWeight: 600 }}>{opt === "Focus" ? "Line Focus" : "Word Flow"}</span>
-                          <span style={{ fontSize: 11, opacity: 0.65 }}>
-                            {opt === "Focus" ? "Lines grow into focus and fade with distance." : "Words fill as they play; lines glide into view."}
-                          </span>
-                        </div>
-                      ) : (
-                        opt
-                      )}
-                      {opt === val && <Check size={17} strokeWidth={3} aria-hidden="true" />}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
+        const key = r.k;
+        if (!key) return null;
+        const startup = key === "startup";
+        const lyricsStyle = key === "lyrStyle";
+        const busy = startup && (startupMode === null || savingStartup);
+        const options = (r.o || []).map((option) => lyricsStyle ? {
+          value: option,
+          label: option === "Focus" ? "Line Focus" : "Word Flow",
+          description: option === "Focus" ? "Lines grow into focus and fade with distance." : "Words fill as they play as lines glide into view.",
+        } : { value: option, label: option });
+        const value = String(val);
+        const displayValue = startup && val === null ? "checking?"
+          : startup && val === "Unavailable" ? "unavailable"
+          : options.find((option) => option.value === value)?.label ?? value;
+        return <SettingsDropdown label={r.l} value={value} displayValue={displayValue} options={options}
+          open={openDropdown === key} busy={busy} disabled={busy || (startup && startupMode === "Unavailable")}
+          onOpenChange={(open) => setOpenDropdown((current) => open ? key : current === key ? null : current)}
+          onSelect={(option) => updateSetting(key, option as SettingsState[typeof key])} />;
       }
 
       case "rng": {
@@ -819,21 +720,11 @@ export function Settings({
           />
         );
 
-      case "btn":
-        if (r.a === "cache") return <div className="settings-cache-controls">
-          <div className="settings-action-buttons">
-            <button type="button" className="settings-btn" onClick={() => handleAction(r.a)}>View</button>
-            <button type="button" className="settings-btn" disabled={clearingCache} onClick={() => setConfirmClearCache(true)}>Clear cache</button>
-          </div>
-        </div>;
-        return (
-          <div className="settings-action-buttons">
-            {r.a === "hist" && confirmHistory && <button type="button" className="settings-btn" onClick={() => setConfirmHistory(false)}>Cancel</button>}
-            <button type="button" className="settings-btn" onClick={() => handleAction(r.a)}>
-              {r.a === "hist" && confirmHistory ? "Confirm clear" : r.b}
-            </button>
-          </div>
-        );
+      case "btn": {
+        const action = r.a;
+        if (action !== "cache" && action !== "hist" && action !== "searchHistory") return null;
+        return <button type="button" className="settings-btn" disabled={action === "cache" && (!isMyGo() || clearingCache)} onClick={() => setClearTarget(action)}>{r.b}</button>;
+      }
 
       case "txt":
         return <span className="settings-txt">{r.v as string}</span>;
@@ -845,13 +736,16 @@ export function Settings({
 
   const renderRow = (r: SettingRowDef, idx: number) => {
     const dimmed = isDimmed(r.dep);
-    if (r.t === "eq") return <Equalizer key={`${r.l}-${idx}`} />;
+    if (r.t === "eq") return <Equalizer key={`${r.l}-${idx}`} presetsOpen={openDropdown === "equalizer"} onPresetsOpenChange={(open) => setOpenDropdown((current) => open ? "equalizer" : current === "equalizer" ? null : current)} />;
     if (r.t === "zoom") return <div className="settings-row settings-zoom-row" key={`${r.l}-${idx}`}><div><b>{r.l}</b>{r.d && <small>{r.d}</small>}</div><ZoomControl /></div>;
     return (
       <div className={`settings-row ${r.t === "dd" || r.t === "prog" ? "settings-row-select" : ""} ${dimmed ? "dim" : ""}`} key={`${r.l}-${idx}`}>
         <div>
           <b>{r.l}</b>
-          {r.d ? <small>{r.d}</small> : null}
+          {r.a === "cache" ? <small aria-live="polite">{!isMyGo() ? "available in the installed app"
+            : cacheCount === "error" ? "couldn't load the saved song count"
+            : cacheCount === null ? "counting saved songs"
+            : `${cacheCount} ${cacheCount === 1 ? "song" : "songs"} saved`}</small> : r.d ? <small>{r.d}</small> : null}
         </div>
         {renderControl(r)}
       </div>
@@ -947,7 +841,6 @@ export function Settings({
                   onClick={() => {
                     setQuery("");
                     setActiveSection(id);
-                    setConfirmHistory(false);
                     setShowLicenses(false);
                     setShowLyricsSources(false);
                     if (mainRef.current) mainRef.current.scrollTop = 0;
@@ -992,7 +885,15 @@ export function Settings({
                 </details>)}</div>
               </>}
             </div> : <div className="settings-about">
-              <button type="button" disabled={!isMyGo()} onClick={() => { void TrayControl.checkForUpdates().catch(() => showSnackbar({ text: "couldn't open the update window" })); }}><CircleHelp size={21} /><span><strong>check for updates</strong><small>get the latest version of WiseWave</small></span><ChevronRight size={19} /></button>
+              <section className="settings-update-card" aria-label="App updates">
+                <div className="settings-update-info">
+                  <strong>WiseWave <span className="settings-update-version">{appVersion}</span></strong>
+                  <small aria-live="polite">{updateStatusText}</small>
+                </div>
+                <button className="settings-btn" type="button" disabled={!canCheckForUpdates || updateStatus === "unavailable" || openingUpdater} aria-label="Check for updates" aria-busy={openingUpdater} onClick={() => void checkForUpdates()}>
+                  {openingUpdater ? <Classic aria-hidden="true" /> : <><RefreshCw size={16} aria-hidden="true" />Check for updates</>}
+                </button>
+              </section>
               <button type="button" onClick={() => { setShowLicenses(true); if (mainRef.current) mainRef.current.scrollTop = 0; }}><BookOpen size={21} /><span><strong>Open source licenses</strong><small>Licenses and notices for included components</small></span><ChevronRight size={19} /></button>
             </div>)}
 
@@ -1065,17 +966,6 @@ export function Settings({
         )}
       </main>
       </div>
-      {showCachedSongs && (
-        <div className={`settings-progress-picker${cachedSongsClosing ? " closing" : ""}`} role="dialog" aria-modal="true" aria-label={cachedSongsEmpty ? "Songs saved for quick playback" : undefined} aria-labelledby={cachedSongsEmpty ? undefined : "cached-songs-title"} onMouseDown={(event) => { if (event.target === event.currentTarget) closeCachedSongs(); }}>
-          <div className={`settings-progress-panel settings-cached-panel${cachedSongsEmpty ? " is-empty" : ""}`}>
-            <header>
-              {!cachedSongsEmpty && <div><h2 id="cached-songs-title">Songs saved for quick playback</h2><p>These songs are saved to play faster and removed automatically when space is needed.</p></div>}
-              <button type="button" autoFocus aria-label="Close cached songs" onClick={closeCachedSongs}><X size={18} /></button>
-            </header>
-            <CachedSongs knownTracks={knownTracks} revision={cacheRevision} onEmptyChange={setCachedSongsEmpty} />
-          </div>
-        </div>
-      )}
       {progressPickerOpen && (
         <div
           className={`settings-progress-picker${progressPickerClosing ? " closing" : ""}`}
@@ -1122,7 +1012,7 @@ export function Settings({
           </div>
         </div>
       )}
-      {confirmClearCache && <DeleteConfirmation title="Clear cached songs?" description="This will remove temporarily cached songs. Your downloads won't be affected." onCancel={() => setConfirmClearCache(false)} onConfirm={() => { void clearCache(); }} />}
+      {clearTarget && <DeleteConfirmation {...clearConfirmations[clearTarget]} confirmLabel="Clear" onCancel={() => setClearTarget(null)} onConfirm={confirmClear} />}
       <PlayerAlert message={note} onDismiss={dismissNote} />
     </div>
     </div>

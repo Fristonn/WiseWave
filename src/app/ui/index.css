@@ -4754,7 +4754,6 @@ kbd {
 .settings-nav-icon.is-appearance,
 .settings-nav-icon.is-playback,
 .settings-nav-icon.is-lyrics,
-.settings-nav-icon.is-library,
 .settings-nav-icon.is-privacy,
 .settings-nav-icon.is-about {
   color: #fff;
@@ -4878,84 +4877,6 @@ kbd {
   font-size: 14px;
 }
 
-.settings-cached-count {
-  color: #b5bac1;
-  font-size: 13px;
-  margin: 0 0 12px;
-}
-
-.settings-cached-panel {
-  display: flex;
-  flex-direction: column;
-  max-height: min(600px, calc(100vh - 120px));
-  min-height: 0;
-}
-
-.settings-cached-panel.is-empty {
-  position: relative;
-  min-height: 150px;
-  justify-content: center;
-}
-
-.settings-cached-panel.is-empty header {
-  position: absolute;
-  top: 22px;
-  right: 22px;
-  margin: 0;
-}
-
-.settings-cached-panel.is-empty .settings-cached-songs {
-  padding-right: 0;
-  text-align: center;
-}
-
-.settings-cached-songs {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 12px;
-}
-
-.settings-cache-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  flex: none;
-}
-
-.settings-cached-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #ffffff10;
-}
-
-.settings-cached-art {
-  width: 48px;
-  height: 48px;
-  flex: none;
-  border-radius: 4px;
-}
-
-.settings-cached-copy {
-  display: grid;
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
-}
-
-.settings-cached-copy strong, .settings-cached-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.settings-cached-item small {
-  color: #b5bac1;
-  font-size: 13px;
-}
-
 .settings-in h2 {
   font-family: var(--font-player);
   font-size: 12px;
@@ -5025,6 +4946,59 @@ kbd {
 .settings-about h2 {
   margin: 32px 0 8px;
   color: #96969c;
+}
+
+.settings-update-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+  padding: 16px 12px 20px;
+  border-bottom: 1px solid #ffffff18;
+}
+
+.settings-update-info {
+  flex: 1 1 180px;
+}
+
+.settings-update-version {
+  margin-inline-start: 6px;
+  color: #a4a4a4;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-update-card .settings-btn {
+  margin-left: auto;
+  min-height: 44px;
+  min-width: 184px;
+  padding-inline: 16px;
+  border-radius: 8px;
+}
+
+.settings-update-card .settings-btn:not(:disabled),
+.settings-update-card .settings-btn[aria-busy="true"] {
+  background: #f2f2f4;
+  color: #151518;
+  opacity: 1;
+}
+
+.settings-update-card .settings-btn:not(:disabled) {
+  cursor: pointer;
+}
+
+.settings-update-card .settings-btn:not(:disabled):hover {
+  background: #fff;
+}
+
+.settings-update-card .settings-btn:not(:disabled):active {
+  background: #dcdce1;
+}
+
+.settings-update-card .settings-btn[aria-busy="true"] {
+  cursor: wait;
 }
 
 .settings-about a, .settings-about > button, .settings-about-search {
@@ -5279,23 +5253,8 @@ kbd {
   font-weight: 500;
 }
 
-.settings-equalizer-preset select {
+.settings-equalizer-preset .settings-ddb {
   min-width: 150px;
-  padding: 8px 30px 8px 10px;
-  border: 1px solid #ffffff1c;
-  border-radius: 6px;
-  background: #252527;
-  color: #eee;
-  font: inherit;
-  cursor: pointer;
-}
-
-.settings-equalizer-preset select:focus {
-  outline: none;
-}
-
-.settings-equalizer-preset select:focus-visible {
-  border-color: #ffffff55;
 }
 
 .settings-equalizer-chart {
@@ -5639,26 +5598,20 @@ kbd {
   border: 1px solid #ffffff20;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
-}
-
-.settings-ddb[aria-expanded="true"] {
-  border-color: #f4f1ea;
-  box-shadow: inset 0 0 0 1px #f4f1ea;
 }
 
 .settings-ddb[aria-expanded="true"] svg {
   transform: rotate(180deg);
 }
 
-.settings-ddb:focus-visible, .settings-dd-menu button:focus-visible {
+.settings-ddb:focus-visible {
   outline: 2px solid #aaa;
   outline-offset: -2px;
 }
 
-.settings-ddb:hover {
-  background: #202023;
-  border-color: #ffffff28;
+.settings-ddb:disabled {
+  color: #a4a4a4;
+  cursor: default;
 }
 
 .settings-ddb svg {
@@ -5674,57 +5627,46 @@ kbd {
 .settings-dd-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   z-index: 50;
+  width: max-content;
   min-width: 100%;
+  max-width: 280px;
   max-height: 240px;
   overflow-y: auto;
   margin: 0;
-  padding: 4px 0;
   list-style: none;
-  background: #202022;
-  border: 1px solid #ffffff18;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px #0004;
+  color: #f4f1ea;
+  overscroll-behavior: contain;
 }
 
 .settings-dd-menu[data-above="true"] {
   top: auto;
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 6px);
 }
 
-.settings-dd-menu li button {
-  display: flex;
-  align-items: center;
+.settings-dd-menu li > button {
   justify-content: space-between;
-  gap: 14px;
-  width: 100%;
-  min-height: 40px;
-  padding: 9px 12px;
-  border-radius: 0;
-  background: transparent;
-  border: none;
-  color: #f4f1ea;
+  min-height: 38px;
   font-family: var(--font-player);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  text-align: left;
-  white-space: nowrap;
-  transition: background-color 0.12s, color 0.12s;
 }
 
-.settings-dd-menu li button:hover {
-  background: #26262a;
-  color: #ffffff;
+.settings-dd-option-copy {
+  display: grid;
+  gap: 3px;
+  padding-block: 6px;
 }
 
-.settings-dd-menu li button[aria-selected="true"] {
-  color: #ffffff;
-  font-weight: 500;
+.settings-dd-option-copy small {
+  color: #b6b6bd;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
-.settings-dd-menu li button svg {
+.settings-dd-menu li > button svg {
   flex: none;
 }
 
@@ -8206,7 +8148,6 @@ span.tooltip-trigger.mini-close-wrap {
   border-radius: 8px;
   background: #1d1d1d;
   color: #fff;
-  box-shadow: 0 20px 60px #0008;
   font-family: var(--font-player);
   animation: playlist-panel-in 220ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -11419,7 +11360,7 @@ span.tooltip-trigger.mini-close-wrap {
   --app-region: no-drag;
 }
 
-.song-menu-list, .song-menu-submenu {
+.song-menu-list, .song-menu-submenu, .settings-dd-menu {
   padding: 4px;
   border-radius: 6px;
   background: #282828;
@@ -11431,7 +11372,7 @@ span.tooltip-trigger.mini-close-wrap {
   overflow-y: auto;
 }
 
-.song-menu-list > button, .song-menu-submenu button {
+.song-menu-list > button, .song-menu-submenu button, :where(.settings-dd-menu) li > button {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -11444,7 +11385,8 @@ span.tooltip-trigger.mini-close-wrap {
   text-align: left;
 }
 
-.song-menu button:not(:disabled):hover, .song-menu button:focus-visible {
+.song-menu button:not(:disabled):hover, .song-menu button:focus-visible,
+.settings-dd-menu button:hover, .settings-dd-menu button:focus-visible {
   background: #3e3e3e;
 }
 
@@ -11461,7 +11403,7 @@ span.tooltip-trigger.mini-close-wrap {
   color: #f3727a;
 }
 
-.song-menu button:focus-visible {
+.song-menu button:focus-visible, .settings-dd-menu button:focus-visible {
   outline: 2px solid #ffffff99;
   outline-offset: -2px;
 }

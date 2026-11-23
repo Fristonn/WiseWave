@@ -1,7 +1,9 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
-import { Discord, MediaSession, Music, Playback, TrayControl, events, type DiscordState, type Line, type MediaSessionState, type PlaybackState, type Track } from "../../../mygo";
+import { Discord, MediaSession, Music, Playback, TrayControl, events, type DiscordState, type Line, type MediaSessionState, type PlaybackState, type Record as LyricsRecord, type Track } from "../../../mygo";
 import { artworkURL, hasArtworkURL } from "../../../shared/ui/Artwork";
 import { readEqualizer, type EqualizerSettings } from "./equalizerSettings";
+
+const emptyLyrics: Line[] = [];
 
 function parseDuration(duration?: string | number): number {
   if (typeof duration === "number" && duration > 0) return duration;
@@ -178,10 +180,7 @@ export function useMusic() {
   const autoplayRef = useRef(autoplay);
   autoplayRef.current = autoplay;
   const [error, setError] = useState("");
-  const [lyrics, setLyrics] = useState<Line[]>([]);
-  const [lyricsCredit, setLyricsCredit] = useState<import("../../../mygo").Record | null>(null);
-  const [plainLyrics, setPlainLyrics] = useState("");
-  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [lyricsResult, setLyricsResult] = useState<{ key: string; record: LyricsRecord | null } | null>(null);
   const historyAddedRef = useRef<string | null>(null);
   const playTimeRef = useRef<{ trackId: string; listenedSec: number }>({ trackId: "", listenedSec: 0 });
   const forYouLoadedRef = useRef(false);
@@ -356,6 +355,7 @@ export function useMusic() {
     historyAddedRef.current = null;
     playTimeRef.current = { trackId: item.id, listenedSec: 0 };
     setTrackLoading(true);
+    setPlaybackState(null);
     setTrack({ ...item });
     setPlaying(true);
     setPosition(0);
@@ -407,7 +407,7 @@ export function useMusic() {
         setPosition(position);
         setDuration(cached.duration_seconds || parseDuration(cached.duration));
         setTrackLoading(true);
-        const preparation = Playback.prepare(cached.id, position).then(async () => {
+        const preparation = Playback.prepareTrack(cached, position).then(async () => {
           const restored = pendingRestore.current;
           if (active && playbackVersion.current === version && restored?.id === cached.id) {
             if (restored.position !== position) await Playback.seek(restored.position);
@@ -470,7 +470,7 @@ export function useMusic() {
     void seekChain.current
       .then(() => {
         if (!active) return;
-        return Playback.play(track.id);
+        return Playback.playTrack(track);
       })
       .then(() => {
         if (active) {
@@ -493,15 +493,29 @@ export function useMusic() {
       active = false;
     };
   }, [track]);
+  const lyricsTrackID = track?.id;
+  const lyricsTitle = track?.title || "";
+  const lyricsArtist = track?.artist || "";
+  const lyricsAlbum = track?.album || "";
+  const catalogDuration = track?.duration_seconds || parseDuration(track?.duration);
+  const audioDuration = playbackState?.track_id === lyricsTrackID ? playbackState?.duration || 0 : 0;
+  const lyricsDuration = Math.round(audioDuration > 0 && (!catalogDuration || Math.abs(audioDuration - catalogDuration) > Math.max(3, catalogDuration * 0.02)) ? audioDuration : catalogDuration);
+  const lyricsKey = JSON.stringify([lyricsTrackID, lyricsTitle, lyricsArtist, lyricsAlbum, lyricsDuration]);
+  const lyricsCredit = lyricsResult?.key === lyricsKey ? lyricsResult.record : null;
+  const lyrics = lyricsCredit?.lines || emptyLyrics;
+  const plainLyrics = lyricsCredit?.plain_lyrics || "";
+  const lyricsLoading = Boolean(lyricsTrackID && lyricsResult?.key !== lyricsKey);
+  const lyricsPlaying = Boolean(playing && !trackLoading && !buffering && !seekPending.current &&
+    playbackState?.track_id === lyricsTrackID && playbackState?.playing);
+
   useEffect(() => {
-    if (!track) { setLyrics([]); setPlainLyrics(""); setLyricsCredit(null); return; }
+    if (!lyricsTrackID) return;
     let active = true;
-    setLyrics([]); setPlainLyrics(""); setLyricsCredit(null); setLyricsLoading(true);
-    Music.lyrics(track.title, track.artist, track.album, Math.round(track.duration_seconds || duration || 0), track.id).then((result) => {
-      if (active) { setLyrics(result?.lines || []); setPlainLyrics(result?.plain_lyrics || ""); setLyricsCredit(result); }
-    }).catch(() => { if (active) { setLyrics([]); setPlainLyrics(""); setLyricsCredit(null); } }).finally(() => { if (active) setLyricsLoading(false); });
+    void Music.lyrics(lyricsTitle, lyricsArtist, lyricsAlbum, lyricsDuration, lyricsTrackID).then((record) => {
+      if (active) setLyricsResult({ key: lyricsKey, record });
+    }).catch(() => { if (active) setLyricsResult({ key: lyricsKey, record: null }); });
     return () => { active = false; };
-  }, [track?.id, track?.title, track?.artist, track?.album]);
+  }, [lyricsKey, lyricsTrackID, lyricsTitle, lyricsArtist, lyricsAlbum, lyricsDuration]);
 
   const loadRadioPage = useCallback((seed: string): Promise<void> => {
     const session = radioSession.current ?? { seed, playlist: "", continuation: "", exhausted: false };
@@ -673,7 +687,7 @@ export function useMusic() {
           const prepared = await restorePreparation.current;
           if (version !== playbackVersion.current) return;
           if (!prepared) {
-            await Playback.prepare(track.id, restored.position);
+            await Playback.prepareTrack(track, restored.position);
             if (version !== playbackVersion.current) return;
             pendingRestore.current = null;
           }
@@ -739,7 +753,7 @@ export function useMusic() {
       void Playback.state().then(setPlaybackState).catch(() => {});
     } catch {
       try {
-        await Playback.play(currentTrack.id);
+        await Playback.playTrack(currentTrack);
         if (currentPos > 0) await Playback.seek(currentPos);
         setPlaying(true);
         setError("");
@@ -752,6 +766,8 @@ export function useMusic() {
 
   const stopPlayback = () => {
     playbackControlVersion.current++;
+    setSeekVersion(++seekVersionRef.current);
+    seekPending.current = false;
     void Playback.stop().catch(() => {});
     setPlaying(false);
     setPosition(0);
@@ -828,12 +844,15 @@ export function useMusic() {
   }, [track, playing, queue.length, upNext.length, repeatMode, autoplay, muted]);
 
   useEffect(() => {
-    const queued = queue[0]?.id || ((!radioSequence.current || autoplay) ? upNext[0]?.id : undefined);
+    const queued = queue[0] || ((!radioSequence.current || autoplay) ? upNext[0] : undefined);
     const repeatTrack = repeatMode === "queue" && (!radioSequence.current || autoplay)
-      ? (collectionSequence.current ? collectionTracks.current[0]?.id : playbackListRef.current[0]?.id)
+      ? (collectionSequence.current ? collectionTracks.current[0] : playbackListRef.current[0])
       : undefined;
-    const nextID = forwardStackRef.current.at(-1)?.id || queued || repeatTrack || nextRadioID;
-    void Playback.prefetch(playing && !trackLoading ? nextID || "" : "").catch(() => setError("couldn't get the next song ready"));
+    const nextTrack = playing && !trackLoading
+      ? forwardStackRef.current.at(-1) || queued || repeatTrack || mixTracks[0]
+      : undefined;
+    const prefetch = nextTrack ? Playback.prefetchTrack(nextTrack) : Playback.prefetch("");
+    void prefetch.catch(() => setError("couldn't get the next song ready"));
   }, [playing, trackLoading, track?.id, queue[0]?.id, upNext, autoplay, nextRadioID, repeatMode]);
 
   useEffect(() => {
@@ -980,10 +999,17 @@ export function useMusic() {
     else if (action === "next") actionsRef.current.next();
     else if (action === "previous") actionsRef.current.previous();
     else if (action === "seek") {
+      const trackVersion = playbackVersion.current;
+      const seekVersion = seekVersionRef.current;
+      const controlVersion = playbackControlVersion.current;
       void Playback.state().then((state) => {
-        if (state?.position != null) setPosition(state.position);
+        if (trackVersion !== playbackVersion.current || seekVersion !== seekVersionRef.current ||
+            controlVersion !== playbackControlVersion.current || seekPending.current || !state.track_id ||
+            state.track_id !== trackRef.current?.id || !Number.isFinite(state.position) || state.position < 0) return;
+        setSeekVersion(++seekVersionRef.current);
+        setPosition(state.position);
       }).catch(() => {});
     }
   }), []);
-  return { seek, seekVersion, changeVolume, track, trackLoading, buffering, history, clearHistory, popular, forYou, preserveForYou, togglePreserveForYou, queue, upNext, mixTracks, playMixTrack, playing, position, duration, volume, muted, repeat, repeatMode, cycleRepeat, autoplay, error, lyrics, plainLyrics, lyricsCredit, lyricsLoading, playbackState, discordEnabled, toggleDiscord, privateListening, togglePrivateListening, resetAudioEngine, stopPlayback, play, playQueued, previous, next, shuffle, toggle, toggleMute, setQueue, setError, setPlaying, setPosition, setDuration, setVolume, setRepeat, setAutoplay };
+  return { seek, seekVersion, changeVolume, track, trackLoading, buffering, history, clearHistory, popular, forYou, preserveForYou, togglePreserveForYou, queue, upNext, mixTracks, playMixTrack, playing, position, duration, volume, muted, repeat, repeatMode, cycleRepeat, autoplay, error, lyrics, plainLyrics, lyricsCredit, lyricsLoading, lyricsPlaying, playbackState, discordEnabled, toggleDiscord, privateListening, togglePrivateListening, resetAudioEngine, stopPlayback, play, playQueued, previous, next, shuffle, toggle, toggleMute, setQueue, setError, setPlaying, setPosition, setDuration, setVolume, setRepeat, setAutoplay };
 }

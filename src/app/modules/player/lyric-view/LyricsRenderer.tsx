@@ -466,7 +466,7 @@ const ExistingLyrics = memo(function ExistingLyrics({
     pendingSeekIndexRef.current = index === activeIndex ? null : index;
     setDetachedLyrics(index === activeIndex ? null : displayedLines);
     if (index === activeIndex && followingActiveLyric) centerActiveLyric(true);
-    onSelect(Math.ceil(startTimeMs / 1000) * 1000);
+    onSelect(startTimeMs);
   };
 
   const toggleTranslation = () => {

@@ -13,7 +13,37 @@ import { useSongMenu } from "../shared/SongMenu";
 
 const artistCache = new Map<string, { value: ArtistDetail; expires: number }>();
 const artistRequests = new Map<string, Promise<ArtistDetail>>();
-const artistKey = (id: string, name: string) => id ? `id:${id}` : `name:${name.trim().toLowerCase()}`;
+const normalizeArtistName = (name: string) => name.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+const artistKey = (id: string, name: string) => `${id}\n${normalizeArtistName(name)}`;
+
+export class ArtistNotFoundError extends Error {
+  constructor() {
+    super("couldn't find this artist");
+  }
+}
+
+async function requestArtist(id: string) {
+  const result = await Music.artist(id);
+  if (!result) throw new Error("couldn't load this artist");
+  return result;
+}
+
+async function resolveArtist(id: string, name: string) {
+  let idError: unknown;
+  if (id) {
+    try {
+      return await requestArtist(id);
+    } catch (error) {
+      idError = error;
+    }
+  }
+  const normalizedName = normalizeArtistName(name);
+  if (!normalizedName) throw idError ?? new ArtistNotFoundError();
+  const matches = await Music.artists(name.trim());
+  const match = matches.find((item) => item.id && item.id !== id && normalizeArtistName(item.name) === normalizedName);
+  if (!match) throw idError ?? new ArtistNotFoundError();
+  return requestArtist(match.id);
+}
 
 function cachedArtist(key: string) {
   const entry = artistCache.get(key);
@@ -27,21 +57,13 @@ export function loadArtist(id: string, name: string): Promise<ArtistDetail> {
   if (cached) return Promise.resolve(cached);
   const pending = artistRequests.get(key);
   if (pending) return pending;
-  const request = (async () => {
-    let artistId = id;
-    if (!artistId) {
-      const matches = await Music.artists(name);
-      artistId = matches.find((item) => item.name.toLowerCase() === name.toLowerCase())?.id || "";
-    }
-    if (!artistId) throw new Error("Artist not found.");
-    const result = await Music.artist(artistId);
-    if (!result) throw new Error("couldn't load this artist");
+  const request = resolveArtist(id, name).then((result) => {
     if (!result.releases_incomplete) {
       if (artistCache.size >= 24) artistCache.delete(artistCache.keys().next().value!);
       artistCache.set(key, { value: result, expires: Date.now() + 10 * 60_000 });
     }
     return result;
-  })().finally(() => artistRequests.delete(key));
+  }).finally(() => artistRequests.delete(key));
   artistRequests.set(key, request);
   return request;
 }
@@ -75,7 +97,7 @@ export function Artist({ id, name, onBack, onPlay, onArtist, onAlbum, current = 
     setLoading(!cached); setError(""); setArtist(cached); setExpanded(false); setDescriptionOverflowing(false);
     setShowAll(false); setBannerFailed(false); setBannerLoaded(false); setMixLoading(false); setMixError("");
     void loadArtist(id, name).then((result) => { if (active) setArtist(result); }).catch((reason: unknown) => {
-      if (active) setError(reason instanceof Error ? reason.message : "couldn't load this artist");
+      if (active) setError(reason instanceof ArtistNotFoundError ? reason.message : "couldn't load this artist");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; mixRequest.current++; };
   }, [id, name, retry]);

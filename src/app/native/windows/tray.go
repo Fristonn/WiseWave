@@ -1,11 +1,13 @@
 package windows
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/updater"
@@ -43,6 +45,22 @@ func (tray *TrayControl) SetWindowPreferences(minimizeToTray, miniWhenMinimized 
 func (tray *TrayControl) StartupEnabled() bool { return mygo.App.OpenAtLogin() }
 
 func (tray *TrayControl) CheckForUpdates() { updater.CheckForUpdates() }
+
+func (tray *TrayControl) UpdateStatus() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	update, err := mygo.Updater.Check(ctx)
+	switch {
+	case errors.Is(err, mygo.ErrUpdatesDisabled):
+		return "unavailable", nil
+	case err != nil:
+		return "", err
+	case update != nil:
+		return "available", nil
+	default:
+		return "current", nil
+	}
+}
 
 func (tray *TrayControl) SetStartup(enabled bool) error {
 	if mygo.IsDev() {

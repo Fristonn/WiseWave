@@ -1,5 +1,7 @@
 import { Artwork } from "../../../shared/ui/Artwork";
+import { isMyGo } from "mygo-runtime";
 import { accountText } from "../shared/accountText";
+import { youtubeCard } from "../shared/accountCards";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import youtubeLikedMusicArt from "../../../../../resources/images/youtube-liked-music.svg";
@@ -14,21 +16,20 @@ export function YouTubeIcon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 26 26" fill="none" aria-hidden="true"><path d="M13 26C20.176 26 26 20.176 26 13S20.176 0 13 0 0 5.824 0 13s5.824 13 13 13Z" fill="#f03" /><path d="M20.5 13a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" stroke="#fff" /><path d="m17.75 13-7.5-4.25v8.5z" fill="#fff" /></svg>;
 }
 
-let lastAccount: YouTubeAccountStatus | null = null;
-
 export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImportResult) => number }) {
-  const [account, setAccount] = useState<YouTubeAccountStatus | null>(() => lastAccount);
+  const [account, setAccount] = useState<YouTubeAccountStatus | null>(youtubeCard.getAccount);
   const [login, setLogin] = useState<YouTubeLoginStatus>({ busy: false, error: "" });
-  const [sync, setSync] = useState<YouTubeSyncStatus | null>(null);
+  const [sync, setSync] = useState<YouTubeSyncStatus | null>(youtubeCard.getSync);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [modal, setModal] = useState(false);
   const [closing, setClosing] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
-  const lastLinked = useRef<boolean | null>(null);
+  const lastLinked = useRef(account?.linked ?? null);
   const timer = useRef<number | null>(null);
   const mounted = useRef(true);
+  const syncVersion = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -36,12 +37,14 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
     const refresh = async () => {
       if (reading) return;
       reading = true;
+      const version = syncVersion.current;
       try {
         const [nextAccount, nextLogin, nextSync] = await Promise.all([YouTubeAccount.status(), YouTubeLogin.status(), YouTubeAccount.syncStatus()]);
         if (!mounted.current) return;
         if (lastLinked.current === false && nextAccount.linked) { setModal(true); setClosing(false); }
         lastLinked.current = nextAccount.linked;
-        lastAccount = nextAccount; setAccount(nextAccount); setLogin(nextLogin); setSync(nextSync);
+        setAccount(nextAccount); setLogin(nextLogin);
+        if (version === syncVersion.current) setSync(nextSync);
         if (!nextAccount.linked) { setModal(false); setImporting(null); }
       } catch {
         if (mounted.current) setError("youtube music sign-in works in the desktop app");
@@ -52,7 +55,10 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
     const offImport = events.youtubeImportChanged.on((status) => { if (mounted.current) setImporting(status.phase === "importing" ? status.source_id : null); });
     const poll = window.setInterval(() => { void refresh(); }, 1000);
     const offAccount = events.youtubeAccountChanged.on(() => { void refresh(); });
-    const offSync = events.youtubeLibrarySyncChanged.on((status) => { if (mounted.current) setSync(status); });
+    const offSync = events.youtubeLibrarySyncChanged.on((status) => {
+      syncVersion.current++;
+      if (mounted.current) setSync(status);
+    });
     return () => { mounted.current = false; window.clearInterval(poll); offAccount(); offSync(); offImport(); if (timer.current !== null) window.clearTimeout(timer.current); };
   }, []);
 
@@ -73,7 +79,7 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
       else if (action === "logout") await YouTubeLogin.logout();
       else { const status = await YouTubeAccount.syncLibrary(); if (mounted.current) setSync(status); }
       const [nextAccount, nextLogin] = await Promise.all([YouTubeAccount.status(), YouTubeLogin.status()]);
-      if (mounted.current) { lastAccount = nextAccount; setAccount(nextAccount); setLogin(nextLogin); if (action === "logout") { setModal(false); setSync(null); setNote("logged out of youtube music"); } }
+      if (mounted.current) { setAccount(nextAccount); setLogin(nextLogin); if (action === "logout") { setModal(false); setSync(null); setNote("logged out of youtube music"); } }
     } catch (cause) {
       if (mounted.current) setError(cause instanceof Error ? cause.message : "couldn't finish that youtube music action");
     } finally { if (mounted.current) setPending(false); }
@@ -120,8 +126,8 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
         </div>
         <div className="settings-account-stats" aria-label="Library totals"><div><b>{library?.liked_songs ?? accountText.unknownCount}</b><span>Liked music</span></div><div><b>{library?.playlist_count ?? accountText.unknownCount}</b><span>Playlists</span></div></div>
         <div className="settings-action-buttons"><button className="settings-btn" type="button" onClick={openLibrary}>View library</button><button className="settings-btn" type="button" disabled={busy || Boolean(importing)} onClick={() => { void act("logout"); }}>Log out</button></div>
-      </div> : <div className="settings-account-card">
-        <div className="settings-account-mark settings-nav-icon is-youtube"><YouTubeIcon size={56} /></div><div className="settings-account-copy"><strong>{account?.restoring ? accountText.syncing : busy ? accountText.waitingForYou : accountText.notLinked}</strong><small>{account?.restoring ? "Verifying your saved YouTube Music session." : busy ? accountText.finishSignIn("YouTube Music") : accountText.invitation("YouTube Music")}</small></div>
+      </div> : (!isMyGo() || (account && !account.restoring)) && <div className="settings-account-card">
+        <div className="settings-account-mark settings-nav-icon is-youtube"><YouTubeIcon size={56} /></div><div className="settings-account-copy"><strong>{busy ? accountText.waitingForYou : accountText.notLinked}</strong><small>{busy ? accountText.finishSignIn("YouTube Music") : accountText.invitation("YouTube Music")}</small></div>
         <div className="settings-action-buttons"><button className="settings-btn" type="button" disabled={busy || account === null} onClick={() => { void act("start"); }}>{busy ? accountText.waiting : "Link YouTube Music"}</button>{login.busy && <button className="settings-btn" type="button" disabled={pending} onClick={() => { void act("cancel"); }}>Cancel</button>}</div>
       </div>}
       <PlayerAlert message={message || ""} onDismiss={() => setError("")} />

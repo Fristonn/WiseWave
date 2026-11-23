@@ -158,6 +158,6 @@ export function FullscreenPlayer({ music, onClose, liked, onLike }: { music: Ret
         <div className="fullscreen-player-volume"><button type="button" aria-label={music.muted ? "Unmute" : "Mute"} onClick={music.toggleMute}>{music.muted || music.volume === 0 ? <VolumeX size={20} /> : <Volume1 size={20} />}</button><PlayerSlider className="fullscreen-player-volume-slider" label="Volume" max={100} value={music.muted ? 0 : music.volume} onChange={music.changeVolume} tooltipMode="drag" tooltip={(value) => `${Math.round(value)}%`} /><Volume2 size={20} aria-hidden="true" /></div>
       </div>
     </div>
-    <div className="fullscreen-player-lyrics"><Lyrics credit={music.lyricsCredit} seekVersion={music.seekVersion} lines={music.lyrics} plain={music.plainLyrics} loading={music.lyricsLoading} position={music.position} duration={music.duration} playing={music.playing} track={track} onSeek={music.seek} /></div>
+    <div className="fullscreen-player-lyrics"><Lyrics credit={music.lyricsCredit} seekVersion={music.seekVersion} lines={music.lyrics} plain={music.plainLyrics} loading={music.lyricsLoading} position={music.position} duration={music.duration} playing={music.lyricsPlaying} track={track} onSeek={music.seek} /></div>
   </section>, document.body);
 }

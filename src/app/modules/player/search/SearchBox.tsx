@@ -11,6 +11,18 @@ import { loadSearchSuggest, peekSearchSuggest } from "./searchCache";
 import { SearchSkeleton } from "./SearchSkeleton";
 
 const storageKey = "wisewave-search-history";
+const historyCleared = "wisewave-search-history-cleared";
+
+export function clearSearchHistory() {
+  try {
+    localStorage.removeItem(storageKey);
+  } catch {
+    return false;
+  }
+  window.dispatchEvent(new Event(historyCleared));
+  return true;
+}
+
 function supportedMusicLink(value: string) {
   try {
     const url = new URL(value);
@@ -76,6 +88,11 @@ export function SearchBox({
   const list = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setDraft(query); }, [query]);
+  useEffect(() => {
+    const clear = () => { setHistory([]); setSelected(-1); };
+    window.addEventListener(historyCleared, clear);
+    return () => window.removeEventListener(historyCleared, clear);
+  }, []);
 
   const update = (items: string[]) => {
     setHistory(items);

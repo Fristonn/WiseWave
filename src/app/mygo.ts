@@ -47,6 +47,9 @@ export interface CacheClearProgress {
 export interface CachedSong {
   id: string;
   size: number;
+  title: string;
+  artist: string;
+  artwork: string;
 }
 
 export interface CanvasResult {
@@ -463,6 +466,9 @@ export const Music = {
 } as const;
 
 export const Playback = {
+  cachedSongCount(): Promise<number> {
+    return call("Playback.CachedSongCount");
+  },
   clearCachedSongs(): Promise<CacheClearProgress> {
     return call("Playback.ClearCachedSongs");
   },
@@ -475,14 +481,26 @@ export const Playback = {
   play(id: string): Promise<void> {
     return call("Playback.Play", id);
   },
+  playTrack(track: Track): Promise<void> {
+    return call("Playback.PlayTrack", track);
+  },
   prefetch(id: string): Promise<void> {
     return call("Playback.Prefetch", id);
+  },
+  prefetchTrack(track: Track): Promise<void> {
+    return call("Playback.PrefetchTrack", track);
   },
   prepare(id: string, position: number): Promise<void> {
     return call("Playback.Prepare", id, position);
   },
+  prepareTrack(track: Track, position: number): Promise<void> {
+    return call("Playback.PrepareTrack", track, position);
+  },
   reset(): Promise<void> {
     return call("Playback.Reset");
+  },
+  resolveCachedSong(id: string): Promise<CachedSong | null> {
+    return call("Playback.ResolveCachedSong", id);
   },
   resume(): Promise<void> {
     return call("Playback.Resume");
@@ -543,6 +561,9 @@ export const TrayControl = {
   },
   update(state: TrayState): Promise<void> {
     return call("TrayControl.Update", state);
+  },
+  updateStatus(): Promise<string> {
+    return call("TrayControl.UpdateStatus");
   },
 } as const;
 
