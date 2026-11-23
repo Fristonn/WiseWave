@@ -84,7 +84,7 @@ export interface SettingsProps {
 const DEFAULT_SETTINGS = {
   ui: "Default",
   progressStyle: "Default",
-  art: true,
+  art: false,
   motion: false,
   tray: true,
   mini: false,

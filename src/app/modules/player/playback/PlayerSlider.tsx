@@ -142,14 +142,14 @@ export function PlayerSlider({
       style={{ "--slider-progress": `${percentage}%` } as CSSProperties}
       tabIndex={disabled ? -1 : 0}
       onKeyDown={(event) => {
-        if (disabled || (event.key !== "ArrowRight" && event.key !== "ArrowLeft")) return;
+        if (disabled || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== "ArrowRight" && event.key !== "ArrowLeft")) return;
         event.preventDefault();
         const nextValue = event.key === "ArrowRight" ? Math.min(max, value + max * .05) : Math.max(0, value - max * .05);
         latestValueRef.current = nextValue;
         onChange(nextValue);
       }}
       onKeyUp={(event) => {
-        if (!disabled && (event.key === "ArrowRight" || event.key === "ArrowLeft")) onCommit?.(latestValueRef.current);
+        if (!disabled && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) onCommit?.(latestValueRef.current);
       }}
       onPointerDown={(event) => {
         event.stopPropagation();

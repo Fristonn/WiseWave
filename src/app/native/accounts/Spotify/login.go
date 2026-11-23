@@ -1,6 +1,7 @@
 package spotify
 
 import (
+	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -12,8 +13,7 @@ import (
 )
 
 const (
-	spotifyLoginURL     = "https://accounts.spotify.com/login?continue=https%3A%2F%2Fopen.spotify.com%2F"
-	spotifyChromeUA     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+	spotifyLoginURL     = "https://accounts.spotify.com/en/login"
 	spotifyLoadingBase  = "https://wisewave.internal/spotify-login/"
 	spotifyLinkingLabel = "Bringing your music over"
 	spotifyLegacyStore  = "spotify-login"
@@ -71,8 +71,8 @@ func (s *SpotifyLogin) Start() error {
 	s.session = session
 	stop := make(chan struct{})
 	s.stop = stop
-	options := presentation.WindowOptions("Link Spotify", spotifyLoginURL, "#121212", session)
-	options.Page.UserAgent = spotifyChromeUA
+	options := presentation.WindowOptions("Link Spotify", "about:blank", "#121212", session)
+	options.Page.BackgroundThrottling = mygo.ThrottlingOff
 	window := mygo.NewWindow(options)
 	s.window = window
 	s.mu.Unlock()
@@ -80,11 +80,34 @@ func (s *SpotifyLogin) Start() error {
 	window.OnClosed(func() {
 		s.finish(gen)
 	})
+	loginLoaded := false
+	retriedInitialLoad := false
+	window.Page().OnDidFinishLoad(func() {
+		if strings.HasPrefix(window.Page().URL(), "https://") {
+			loginLoaded = true
+		}
+	})
 	window.Page().OnDidFailLoad(func(err *mygo.LoadError) {
 		if err == nil {
 			return
 		}
-		log.Printf("spotify login load failed: %s (%s)", err.URL, err.Description)
+		log.Printf("spotify login page failed to load (code %d)", err.Code)
+		if loginLoaded {
+			return
+		}
+		if !retriedInitialLoad {
+			retriedInitialLoad = true
+			time.AfterFunc(time.Second, func() {
+				s.mu.Lock()
+				active := s.gen == gen && s.busy && !s.closing
+				s.mu.Unlock()
+				if active && !window.IsDestroyed() {
+					_ = window.Page().LoadURL(spotifyLoginURL)
+				}
+			})
+			return
+		}
+		window.Page().LoadHTML(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Link Spotify</title><body style="background:#121212;color:#eee;font:16px system-ui;text-align:center;margin:3rem 1rem"><p>couldn't load spotify sign-in</p><a style="color:#1ed760" href="`+spotifyLoginURL+`">try again</a></body></html>`, "")
 	})
 	window.Page().OnDidNavigate(func(raw string) {
 		if !spotifyPostLoginURL(raw) {
@@ -100,6 +123,12 @@ func (s *SpotifyLogin) Start() error {
 		return nil
 	})
 
+	if err := window.Page().LoadURL(spotifyLoginURL); err != nil {
+		s.finish(gen)
+		window.Close()
+		return errors.New("couldn't open spotify sign-in")
+	}
+	window.Focus()
 	go s.poll(gen, session, stop)
 	return nil
 }

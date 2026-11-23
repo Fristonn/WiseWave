@@ -245,11 +245,23 @@ export function Player() {
   useEffect(() => { if (miniOpen) miniChannel.current?.postMessage({ type: "state", state: miniState }); }, [miniOpen, music.track, music.playing, music.position, music.duration, music.volume, music.muted, music.queue.length, music.upNext.length, music.repeatMode, music.autoplay, isLiked]);
   const toggleMini = () => { void (miniOpen ? MiniWindow.close() : MiniWindow.open()).then(() => setMiniOpen(!miniOpen)).catch(() => music.setError("couldn't open the mini player")); };
   useEffect(() => {
+    const releasePointerFocus = () => {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && !focused.matches(":focus-visible") &&
+          focused.closest('a, button, [role="button"], [role="menuitem"], [role="slider"]')) focused.blur();
+    };
+    window.addEventListener("blur", releasePointerFocus);
+    return () => window.removeEventListener("blur", releasePointerFocus);
+  }, []);
+
+  useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat) return;
+      if (event.defaultPrevented || event.isComposing) return;
       if (fullscreen) return;
       const key = event.key.toLowerCase();
       const primary = event.ctrlKey || event.metaKey;
+      const playPauseKey = key === " " && !primary && !event.altKey && !event.shiftKey;
+      if (event.repeat && !playPauseKey) return;
       if (primary && (key === "/" || event.code === "Slash")) { event.preventDefault(); setShortcutsOpen((open) => !open); return; }
       if (event.key === "Escape" && welcomeOpen) return;
       if (event.key === "Escape" && shortcutsOpen) { event.preventDefault(); setShortcutsOpen(false); return; }
@@ -260,9 +272,8 @@ export function Player() {
         goHistory(pageIndex + (key === "arrowleft" ? -1 : 1));
         return;
       }
-      if (!music.track || (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="slider"], [role="textbox"]'))) return;
-      if (key === " " && !primary && !event.altKey && !event.shiftKey) { event.preventDefault(); music.toggle(); return; }
-      if (event.target instanceof Element && event.target.closest('a, button, [role="button"], [role="menuitem"]')) return;
+      if (!music.track || (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]'))) return;
+      if (playPauseKey) { event.preventDefault(); if (!event.repeat) void music.toggle(); return; }
       if (primary && !event.altKey && !event.shiftKey && key === "arrowleft" && music.track) { event.preventDefault(); music.previous(); }
       else if (primary && !event.altKey && !event.shiftKey && key === "arrowright" && music.track && (music.queue.length > 0 || music.upNext.length > 0 || music.repeatMode === "queue" || music.autoplay)) { event.preventDefault(); music.next(); }
       else if (!primary && event.shiftKey && !event.altKey && (key === "arrowleft" || key === "arrowright")) { event.preventDefault(); music.seek(Math.max(0, Math.min(music.duration || Infinity, music.position + (key === "arrowleft" ? -10 : 10)))); }

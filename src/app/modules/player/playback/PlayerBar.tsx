@@ -1,12 +1,11 @@
 import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { useEffect, useRef, useState } from "react";
 import { PlayerSlider } from "./PlayerSlider";
-import { SearchSkeleton } from "../search/SearchSkeleton";
 import { Heart, Maximize, ListMusic, Mic2, PictureInPicture2, Play, Volume1, Volume2, VolumeX } from "lucide-react";
 import { ListCollapseIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon, RepeatIcon, ShuffleIcon } from "../../../shared/ui/icons";
 import { IconButton } from "../../../shared/ui/IconButton";
 import { Tooltip } from "../../../shared/ui/Tooltip";
-import { Artwork, hasArtworkURL } from "../../../shared/ui/Artwork";
+import { Artwork } from "../../../shared/ui/Artwork";
 import { PlayingSpectrum } from "../../../shared/ui/PlayingSpectrum";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import type { Track } from "../../../mygo";
@@ -157,7 +156,6 @@ export function PlayerBar({
     };
   }, [mixOpen]);
 
-  const validMixTracks = music.mixTracks.filter((item) => Boolean(item.id && hasArtworkURL(item.album_art_url)));
 
   const position = seekPreview && seekPreview.id === music.track?.id ? seekPreview.value : music.position;
   const volume = volumePreview ?? (music.muted ? 0 : music.volume);
@@ -210,7 +208,7 @@ export function PlayerBar({
             <IconButton
               label="For you <3"
               active={mixOpen}
-              disabled={!controllable || !validMixTracks.length}
+              disabled={!controllable || !music.mixTracks.length}
               onClick={() => setMixOpen((prev) => !prev)}
             >
               <ListCollapseIcon className={`mix-control-icon ${mixOpen ? "active-control" : ""}`} />
@@ -222,14 +220,14 @@ export function PlayerBar({
                   <strong className="mix-popover-title">
                     For you &lt;3
                     <span className="mix-popover-count">
-                      - {validMixTracks.length} {validMixTracks.length === 1 ? "song" : "songs"}
+                      - {music.mixTracks.length} {music.mixTracks.length === 1 ? "song" : "songs"}
                     </span>
                   </strong>
                   <span className="mix-preserve">Keep mix <button type="button" className="settings-tog" role="switch" aria-label="Keep For You mix" aria-checked={music.preserveForYou} onClick={music.togglePreserveForYou} /></span>
                 </div>
-                <div className="mix-popover-list player-scroll" aria-busy={music.mixLoading}>
-                  {music.mixLoading ? <div className="mix-loading"><SearchSkeleton label="loading recommendations" /></div> : validMixTracks.length > 0 ? (
-                    validMixTracks.map((item, index) => (
+                <div className="mix-popover-list player-scroll">
+                  {music.mixTracks.length > 0 ? (
+                    music.mixTracks.map((item, index) => (
                       <div
                         key={`${item.id}-${index}`}
                         role="button"
@@ -239,12 +237,12 @@ export function PlayerBar({
                         onKeyDown={(event) => {
                           if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                             event.preventDefault();
-                            music.play(item);
+                            music.playMixTrack(item);
                             setMixOpen(false);
                           }
                         }}
                         onClick={() => {
-                          music.play(item);
+                          music.playMixTrack(item);
                           setMixOpen(false);
                         }}
                       >

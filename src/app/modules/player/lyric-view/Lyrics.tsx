@@ -94,7 +94,7 @@ export function Lyrics({
   );
 
   const unavailable = !loading && !lyricLines.length && !plainText;
-  const dynamicBackground = settings.art !== false;
+  const dynamicBackground = settings.art === true;
   const artworkTheme = useArtworkTheme(track);
   const theme = dynamicBackground ? artworkTheme : DEFAULT_LYRICS_THEME;
   const artworkSrc = track?.album_art_url || "";

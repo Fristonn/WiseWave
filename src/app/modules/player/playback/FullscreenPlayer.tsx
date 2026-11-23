@@ -116,9 +116,9 @@ export function FullscreenPlayer({ music, onClose, liked, onLike }: { music: Ret
         const last = controls[controls.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last?.focus(); }
         else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first?.focus(); }
-      } else if (event.key === " " && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof Element && event.target.closest('button, input, [role="slider"]'))) {
+      } else if (!event.isComposing && event.key === " " && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !(event.target instanceof Element && event.target.closest('button, input, [role="slider"]'))) {
         event.preventDefault();
-        void musicRef.current.toggle();
+        if (!event.repeat) void musicRef.current.toggle();
       }
     };
     window.addEventListener("keydown", keydown, true);
