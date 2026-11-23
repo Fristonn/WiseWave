@@ -58,6 +58,7 @@ func showTrayMenu(control *TrayControl) error {
 		{1, play, state.HasTrack, false},
 		{2, "Next track", state.HasNext, false},
 		{3, "Mute", true, state.Muted},
+		{8, "Mini player", true, false},
 		{4, "Start with Windows", !mygo.IsDev(), mygo.App.OpenAtLogin()},
 	} {
 		if err := add(entry.id, entry.label, entry.enabled, entry.checked); err != nil {
@@ -68,6 +69,9 @@ func showTrayMenu(control *TrayControl) error {
 		return fmt.Errorf("add separator: %w", callErr)
 	}
 	if err := add(5, "Acknowledgement", true, false); err != nil {
+		return err
+	}
+	if err := add(7, "Restart", true, false); err != nil {
 		return err
 	}
 	if err := add(6, "Exit", true, false); err != nil {
@@ -100,6 +104,10 @@ func showTrayMenu(control *TrayControl) error {
 		return control.Action("acknowledgement")
 	case 6:
 		return control.Action("quit")
+	case 7:
+		return control.Action("restart")
+	case 8:
+		return control.Action("mini")
 	}
 	return nil
 }

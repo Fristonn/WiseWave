@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/audio"
 	"github.com/fgn/puropus"
 	"wisewave-runtime/internal/innertube"
@@ -31,6 +32,10 @@ type Playback struct {
 	decoder         audio.Decoder
 	streamBuf       *streamBuffer
 	version         uint64
+	endVersion      uint64
+	endWatch        func()
+	endDecoder      *playbackDecoder
+	ended           bool
 	cancel          context.CancelFunc
 	err             string
 	volume          float64
@@ -48,6 +53,7 @@ type PlaybackState struct {
 	TrackID     string  `json:"track_id"`
 	Duration    float64 `json:"duration"`
 	Playing     bool    `json:"playing"`
+	Ended       bool    `json:"ended"`
 	Position    float64 `json:"position"`
 	Error       string  `json:"error"`
 	Bitrate     int     `json:"bitrate"`
@@ -58,6 +64,27 @@ type PlaybackState struct {
 	Buffering   bool    `json:"buffering"`
 	LatencyMs   int     `json:"latency_ms"`
 	LoudnessDb  float64 `json:"loudness_db"`
+}
+
+var PlaybackEnded = mygo.NewEvent[string]("playback-ended")
+
+type playbackDecoder struct {
+	audio.Decoder
+	failed atomic.Bool
+}
+
+func (d *playbackDecoder) Read(samples []float32) (int, error) {
+	n, err := d.Decoder.Read(samples)
+	if (err != nil && !errors.Is(err, io.EOF)) || (n == 0 && err == nil) {
+		d.failed.Store(true)
+	}
+	return n, err
+}
+
+func (d *playbackDecoder) SetPosition(frame int64) error {
+	err := d.Decoder.SetPosition(frame)
+	d.failed.Store(err != nil && !errors.Is(err, io.EOF))
+	return err
 }
 
 func NewPlayback(music *Music) *Playback {
@@ -100,6 +127,8 @@ func (p *Playback) load(id string, position float64, start bool, song CachedSong
 	p.mu.Lock()
 	p.currentID = id
 	p.version++
+	p.clearEndWatch()
+	p.endDecoder = nil
 	if p.cancel != nil {
 		p.cancel()
 		p.cancel = nil
@@ -315,7 +344,8 @@ func (p *Playback) load(id string, position float64, start bool, song CachedSong
 	} else if aac, ok := decoder.(*aacDecoder); ok {
 		aac.eq.source = &p.equalizer
 	}
-	player := audio.NewPlayer(decoder)
+	p.endDecoder = &playbackDecoder{Decoder: decoder}
+	player := audio.NewPlayer(p.endDecoder)
 	targetGain := innertube.CalculateLoudnessGain(p.loudness, p.normalize)
 	player.SetVolume(p.volume * targetGain)
 	p.player = player
@@ -328,10 +358,12 @@ func (p *Playback) load(id string, position float64, start bool, song CachedSong
 		player.Seek(time.Duration(position * float64(time.Second)))
 	}
 	if start {
+		p.watchEnd()
 		player.Play()
 	}
 
 	if err := audio.Err(); start && err != nil {
+		p.clearEndWatch()
 		player.Close()
 		p.player = nil
 		p.decoder = nil
@@ -365,10 +397,38 @@ func (p *Playback) load(id string, position float64, start bool, song CachedSong
 	return nil
 }
 
+func (p *Playback) clearEndWatch() {
+	p.endVersion++
+	p.ended = false
+	if p.endWatch != nil {
+		p.endWatch()
+		p.endWatch = nil
+	}
+}
+
+func (p *Playback) watchEnd() {
+	p.clearEndWatch()
+	player, decoder, id, version := p.player, p.endDecoder, p.currentID, p.endVersion
+	p.endWatch = player.OnEnd(func() {
+		p.mu.Lock()
+		if p.endVersion != version {
+			p.mu.Unlock()
+			return
+		}
+		p.ended = !decoder.failed.Load()
+		if !p.ended {
+			p.err = "Audio stream ended unexpectedly"
+		}
+		p.mu.Unlock()
+		_ = PlaybackEnded.Broadcast(id)
+	})
+}
+
 func (p *Playback) Pause() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.player != nil {
+		p.clearEndWatch()
 		p.player.Pause()
 	}
 }
@@ -377,6 +437,8 @@ func (p *Playback) Resume() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.player != nil {
+		p.err = ""
+		p.watchEnd()
 		p.player.Play()
 	}
 }
@@ -385,6 +447,7 @@ func (p *Playback) Stop() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.player != nil {
+		p.clearEndWatch()
 		p.player.Stop()
 	}
 }
@@ -416,6 +479,12 @@ func (p *Playback) Seek(seconds float64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.player != nil {
+		if p.player.Playing() {
+			p.watchEnd()
+		} else {
+			p.clearEndWatch()
+		}
+		p.err = ""
 		p.player.Seek(time.Duration(max(0, min(seconds, 86400)) * float64(time.Second)))
 	}
 }
@@ -639,6 +708,7 @@ func (p *Playback) State() PlaybackState {
 		TrackID:     p.currentID,
 		Duration:    duration,
 		Playing:     p.player.Playing(),
+		Ended:       p.ended,
 		Position:    pos,
 		Error:       p.err,
 		Bitrate:     p.bitrate,

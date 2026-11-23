@@ -1,4 +1,3 @@
-import { Classic } from "../../shared/ui/Classic";
 import { Tooltip } from "../../shared/ui/Tooltip";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, RefreshCw, Unplug } from "lucide-react";
@@ -143,10 +142,7 @@ export function Connection({ music }: { music?: ReturnType<typeof useMusic> }) {
         </span>
         {isResetActive && (
           <span aria-live="polite" className={`connection-action-confirm ${isResetPending ? "" : "confirmed"} ${isResetReturning ? "connection-action-confirm-exit" : ""}`}>
-            {isResetPending && <Classic />}
-            <span className={isResetPending ? "connection-action-pending-text" : "connection-action-confirm-text"}>
-              {isResetPending ? "resetting audio engine" : "audio engine reset"}
-            </span>
+            {isResetPending ? "resetting audio engine" : "audio engine reset"}
           </span>
         )}
       </button>
@@ -161,10 +157,7 @@ export function Connection({ music }: { music?: ReturnType<typeof useMusic> }) {
         </span>
         {isStopActive && (
           <span aria-live="polite" className={`connection-action-confirm ${isStopPending ? "" : "confirmed"} ${isStopReturning ? "connection-action-confirm-exit" : ""}`}>
-            {isStopPending && <Classic />}
-            <span className={isStopPending ? "connection-action-pending-text" : "connection-action-confirm-text"}>
-              {isStopPending ? "stopping playback" : "playback stopped"}
-            </span>
+            {isStopPending ? "stopping playback" : "playback stopped"}
           </span>
         )}
       </button>

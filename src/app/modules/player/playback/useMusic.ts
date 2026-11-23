@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { Discord, MediaSession, Music, Playback, TrayControl, events, type DiscordState, type Line, type MediaSessionState, type PlaybackState, type Record as LyricsRecord, type Track } from "../../../mygo";
 import { artworkURL, hasArtworkURL } from "../../../shared/ui/Artwork";
+import { feedbackText } from "../../../shared/feedbackText";
 import { readEqualizer, type EqualizerSettings } from "./equalizerSettings";
 
 const emptyLyrics: Line[] = [];
@@ -148,6 +149,7 @@ export function useMusic() {
   const collectionTracks = useRef<Track[]>([]);
   const [playing, setPlaying] = useState(false);
   const [trackLoading, setTrackLoading] = useState(false);
+  const trackLoadFailed = useRef(false);
   const [buffering, setBuffering] = useState(false);
   const bufferStall = useRef<{ position: number; since: number } | null>(null);
   const [position, setPosition] = useState(0);
@@ -460,6 +462,7 @@ export function useMusic() {
 
   useEffect(() => {
     if (!track) return;
+    trackLoadFailed.current = false;
     bufferStall.current = null;
     setBuffering(false);
     if (restoredTrack.current === track) {
@@ -481,8 +484,9 @@ export function useMusic() {
       })
       .catch((error: unknown) => {
         if (active) {
+          trackLoadFailed.current = true;
           setPlaying(false);
-          setError(error instanceof Error ? error.message : "couldn't play this song");
+          setError(error instanceof Error ? feedbackText(error.message) : "couldn't play this song");
         }
       })
       .finally(() => {
@@ -675,6 +679,14 @@ export function useMusic() {
   };
   const toggle = async () => {
     if (!track || playbackControlPending.current) return;
+    if (trackLoading && !pendingRestore.current) return;
+    if (!playing && trackLoadFailed.current) {
+      trackLoadFailed.current = false;
+      setTrackLoading(true);
+      setError("");
+      setTrack({ ...track });
+      return;
+    }
     playbackControlPending.current = true;
     playbackControlVersion.current++;
     const version = playbackVersion.current;
@@ -779,11 +791,17 @@ export function useMusic() {
     if (!track || trackLoading) return;
     let active = true;
     let pending = false;
+    let wakePending = false;
+    let handledEndVersion = -1;
     const playVersion = playbackVersion.current;
-    const timer = window.setInterval(() => {
+    const sample = (countListening: boolean) => {
       const version = seekVersionRef.current;
       const controlVersion = playbackControlVersion.current;
-      if (seekPending.current || pending || playbackVersion.current !== playVersion) return;
+      if (!active || seekPending.current || playbackVersion.current !== playVersion) return;
+      if (pending) {
+        if (!countListening) wakePending = true;
+        return;
+      }
       pending = true;
       void Playback.state().then((state) => {
         if (!active || playbackControlPending.current || controlVersion !== playbackControlVersion.current || playbackVersion.current !== playVersion || seekPending.current || version !== seekVersionRef.current || state.track_id !== track.id) return;
@@ -808,7 +826,7 @@ export function useMusic() {
         if (playTimeRef.current.trackId !== track.id) {
           playTimeRef.current = { trackId: track.id, listenedSec: 0 };
         }
-        if (playing && state.playing) {
+        if (countListening && playing && state.playing) {
           playTimeRef.current.listenedSec += 0.25;
         }
 
@@ -821,10 +839,11 @@ export function useMusic() {
           }
         }
 
-        if (playing && !state.playing && !playbackControlPending.current) {
+        if (playing && !state.playing && (state.error || state.ended) && handledEndVersion !== version) {
+          handledEndVersion = version;
           setPlaying(false);
-          if (state.error) setError(state.error);
-          else if (totalDuration > 0 && state.position >= totalDuration - 0.5) {
+          if (state.error) setError(feedbackText(state.error));
+          else {
             if (repeat) {
               seek(0);
               void seekChain.current.then(async () => {
@@ -835,9 +854,18 @@ export function useMusic() {
             } else void next();
           }
         }
-      }).catch(() => { if (active) setError("couldn't check playback"); }).finally(() => { pending = false; });
-    }, 250);
-    return () => { active = false; window.clearInterval(timer); };
+      }).catch(() => { if (active) setError("couldn't check playback"); }).finally(() => {
+        pending = false;
+        if (wakePending) {
+          wakePending = false;
+          sample(false);
+        }
+      });
+    };
+    const unsubscribe = events.playbackEnded.on((id) => { if (id === track.id) sample(false); });
+    const timer = window.setInterval(() => sample(true), 250);
+    sample(false);
+    return () => { active = false; window.clearInterval(timer); unsubscribe(); };
   }, [track, playing, trackLoading, repeat, repeatMode, queue, upNext, autoplay, forYou, popular, playbackSettings.hist, privateListening]);
   useEffect(() => {
     void TrayControl.update({ hasTrack: Boolean(track), playing, hasNext: Boolean(track && (queue.length || upNext.length || forwardStackRef.current.length || repeatMode === "queue" || autoplay)), muted }).catch(() => setError("tray controls aren't working right now"));

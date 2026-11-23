@@ -7,6 +7,11 @@ on:
     paths:
       - src/app/version.ts
   workflow_dispatch:
+    inputs:
+      replace_version:
+        description: Existing version to replace when no packages have been downloaded
+        type: string
+        required: false
 
 concurrency:
   group: windows-release
@@ -70,6 +75,7 @@ jobs:
       - name: Publish latest GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          REPLACE_VERSION: ${{ inputs.replace_version }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -117,6 +123,21 @@ jobs:
             $archives += @(Get-ChildItem -LiteralPath $dir -File -Filter "*.delta" | ForEach-Object FullName)
           }
 
+          $replace = ![string]::IsNullOrWhiteSpace($env:REPLACE_VERSION)
+          if ($replace) {
+            if ($env:GITHUB_REF -cne "refs/heads/main" -or $env:REPLACE_VERSION -cne $version -or $latestTitle -cne "WiseWave $version") {
+              throw "Replacement must match the build and the current Latest release."
+            }
+            foreach ($releaseTag in @($tag, $updateTag)) {
+              $published = Invoke-GitHub api "repos/$env:GITHUB_REPOSITORY/releases/tags/$releaseTag" | ConvertFrom-Json
+              if ($published.assets | Where-Object { $_.name -match '\.(exe|tar\.gz|delta)$' -and $_.download_count -gt 0 }) {
+                throw "Packages from $releaseTag have already been downloaded."
+              }
+            }
+            Invoke-GitHub release delete $updateTag --yes
+            Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$updateTag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
+          }
+
           gh release view $updateTag --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
             $publishedCommit = Invoke-GitHub api "repos/$env:GITHUB_REPOSITORY/commits/$updateTag" --jq ".sha"
@@ -127,6 +148,10 @@ jobs:
           }
 
           $notes = "### what's new`n`n$patchNotes"
+          if ($replace) {
+            Invoke-GitHub release delete $tag --yes
+            Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
+          }
           gh release view $tag --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
             Invoke-GitHub release upload $tag --clobber -- @installers

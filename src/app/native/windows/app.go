@@ -48,7 +48,8 @@ func Run(icon []byte) {
 		}
 		return engine.Tokens(ctx, videoID, visitor)
 	})
-	trayControl := &TrayControl{}
+	mini := &MiniWindow{}
+	trayControl := &TrayControl{mini: mini}
 	caption := &CaptionControls{}
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		trayControl.quitting.Store(true)
@@ -61,7 +62,6 @@ func Run(icon []byte) {
 		}
 	})
 	playback := player.NewPlayback(music)
-	mini := &MiniWindow{}
 	trayControl.minimizeToTray.Store(true)
 	discord := integrations.NewDiscord()
 	mediaSession := integrations.NewMediaSession(playback)
@@ -76,7 +76,7 @@ func Run(icon []byte) {
 	}
 	mygo.App.WhenReady(func() {
 		engine = tokens.New()
-		page := mygo.PageOptions{}
+		page := mygo.PageOptions{BackgroundThrottling: mygo.ThrottlingOff}
 		if !mygo.IsDev() {
 			page.DevTools = mygo.DevToolsDisabled
 			page.PreloadScript = `window.addEventListener("contextmenu", event => event.preventDefault(), true);`

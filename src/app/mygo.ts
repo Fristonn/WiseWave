@@ -193,6 +193,7 @@ export interface PlaybackState {
   track_id: string;
   duration: number;
   playing: boolean;
+  ended: boolean;
   position: number;
   error: string;
   bitrate: number;
@@ -715,6 +716,7 @@ export const events = {
   youtubeImportChanged: event<YouTubeImportStatus>("youtube-import-changed"),
   cacheClearProgressChanged: event<CacheClearProgress>("cache-clear-progress-changed"),
   downloadProgressChanged: event<DownloadProgress>("download-progress-changed"),
+  playbackEnded: event<string>("playback-ended"),
   mediaAction: event<string>("media-action"),
   captionPointerChanged: event<string>("caption-pointer-changed"),
   captionMaximizedChanged: event<boolean>("caption-maximized-changed"),

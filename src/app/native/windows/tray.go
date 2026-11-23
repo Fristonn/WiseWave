@@ -29,6 +29,7 @@ type TrayControl struct {
 	state              TrayState
 	window             *mygo.Window
 	tray               *mygo.Tray
+	mini               *MiniWindow
 	quitting           atomic.Bool
 	minimizeToTray     atomic.Bool
 	miniWhenMinimized  atomic.Bool
@@ -187,6 +188,16 @@ func (tray *TrayControl) Action(action string) error {
 	case "quit":
 		tray.quitting.Store(true)
 		mygo.App.Quit()
+		return nil
+	case "restart":
+		mygo.App.Relaunch()
+		return nil
+	case "mini":
+		if tray.mini == nil {
+			return errors.New("Mini player unavailable")
+		}
+		tray.autoMini.Store(false)
+		tray.mini.Open()
 		return nil
 	case "toggle", "next", "mute", "acknowledgement":
 		state := tray.State()

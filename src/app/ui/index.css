@@ -937,7 +937,7 @@ kbd {
 }
 
 .connection-action:disabled.is-busy {
-  cursor: wait;
+  cursor: default;
   opacity: 0.8;
 }
 
@@ -976,36 +976,6 @@ kbd {
 
 .connection-action-confirm-exit {
   animation: connection-action-confirm-exit .25s cubic-bezier(.4, 0, 1, 1) both;
-}
-
-.connection-action-confirm-text {
-  color: transparent;
-  background: linear-gradient(90deg, #72d99ab8 35%, #72d99a 50%, #72d99ab8 65%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  background-position: 100% 0;
-  background-size: 250% 100%;
-  animation: connection-action-confirm-shimmer .6s .3s ease-in-out both;
-  will-change: background-position;
-}
-
-.connection-action-pending-text {
-  color: transparent;
-  background: linear-gradient(90deg, #ffffff73 30%, #ffffff 50%, #ffffff73 70%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  background-position: 100% 0;
-  background-size: 250% 100%;
-  animation: connection-action-confirm-shimmer 1.1s ease-in-out infinite;
-}
-
-@keyframes connection-action-confirm-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-  to {
-    background-position: 0 0;
-  }
 }
 
 @keyframes connection-action-confirm {
@@ -3864,16 +3834,6 @@ kbd {
   .connection-action-exit {
     opacity: 0;
     transform: none;
-  }
-  .connection-action-confirm-text, .connection-action-pending-text {
-    color: #72d99a;
-    background: none;
-    -webkit-background-clip: initial;
-    background-clip: initial;
-    animation: none;
-  }
-  .connection-action-pending-text {
-    color: #a4a4a4;
   }
   .connection-action-confirm-exit {
     opacity: 0;
@@ -9720,12 +9680,6 @@ span.tooltip-trigger.mini-close-wrap {
   align-items: center;
   justify-content: center;
   gap: 12px;
-}
-
-.connection-action-confirm > .classic {
-  width: 16px;
-  height: 16px;
-  margin-right: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

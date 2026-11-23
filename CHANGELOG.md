@@ -1,5 +1,9 @@
 ## 0.2.2
 
+* the queue continues when a song ends in the background
+* pressing play retries a song that failed to load
+* added mini player and restart to the windows tray menu
+* audio connection actions show sliding feedback
 * lyrics stay in sync more reliably when you seek, repeat, or switch songs
 * longer words highlight more smoothly when their timing is too short
 * artist details can load by name when a saved artist link fails

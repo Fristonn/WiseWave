@@ -38,7 +38,7 @@ func New() *Engine {
 		Title:       "Runtime",
 		Hidden:      true,
 		SkipTaskbar: true,
-		Page:        mygo.PageOptions{Untrusted: true, Session: mygo.NewEphemeralSession()},
+		Page:        mygo.PageOptions{Untrusted: true, Session: mygo.NewEphemeralSession(), BackgroundThrottling: mygo.ThrottlingOff},
 	})
 	engine := &Engine{window: w, ready: make(chan struct{}), client: &http.Client{Timeout: 12 * time.Second}}
 	var once sync.Once
