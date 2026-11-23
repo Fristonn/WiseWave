@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       replace_version:
-        description: Existing version to replace when no packages have been downloaded
+        description: Existing Latest version to replace without changing its version number
         type: string
         required: false
 
@@ -127,12 +127,6 @@ jobs:
           if ($replace) {
             if ($env:GITHUB_REF -cne "refs/heads/main" -or $env:REPLACE_VERSION -cne $version -or $latestTitle -cne "WiseWave $version") {
               throw "Replacement must match the build and the current Latest release."
-            }
-            foreach ($releaseTag in @($tag, $updateTag)) {
-              $published = Invoke-GitHub api "repos/$env:GITHUB_REPOSITORY/releases/tags/$releaseTag" | ConvertFrom-Json
-              if ($published.assets | Where-Object { $_.name -match '\.(exe|tar\.gz|delta)$' -and $_.download_count -gt 0 }) {
-                throw "Packages from $releaseTag have already been downloaded."
-              }
             }
             Invoke-GitHub release delete $updateTag --yes
             Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$updateTag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
