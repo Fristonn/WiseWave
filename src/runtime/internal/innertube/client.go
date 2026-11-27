@@ -119,7 +119,7 @@ func (client *Client) LocalSearchSuggestions(query string) []string {
 }
 
 func (client *Client) retrieveSearch(ctx context.Context, query string) ([]models.Track, error) {
-	raw, err := client.MusicClient.executeAnonymous(ctx, "search", map[string]any{"query": query, "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA=="})
+	raw, err := client.MusicClient.executeAnonymous(ctx, "search", map[string]any{"query": query, "params": songSearchParams})
 	if err != nil {
 		return nil, err
 	}

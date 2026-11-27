@@ -5,7 +5,7 @@ import { artworkURL, loadedArtworkSource } from "../../../shared/ui/Artwork";
 import LyricsRenderer from "./LyricsRenderer";
 import { DEFAULT_LYRICS_THEME, useArtworkTheme } from "../shared/artworkColor";
 import { createPlaybackClock, type PlaybackClock } from "./playbackClock";
-import { normalizeLyricLines } from "./lyricLayout";
+import { isLyricSectionLabel, normalizeLyricLines } from "./lyricLayout";
 
 function isEmbeddedCredit(text: string): boolean {
   return /^\s*(?:lyrics?\s*(?:by)?|words\s*(?:by)?|written\s+by|songwriters?|lyricists?|composers?|composed\s+by|music\s+by|produced\s+by|publishers?|copyright)\s*[:：]\s*\S/i.test(text);
@@ -66,7 +66,7 @@ export function Lyrics({
     if (!value) return "";
     const normalized = value.toLowerCase().replace(/[.!]+$/g, "");
     if (normalized === "lyrics unavailable" || normalized === "no lyrics found" || normalized === "lyrics not found") return "";
-    return value.split(/\r?\n/).filter((line) => !isEmbeddedCredit(line)).join("\n").trim();
+    return value.split(/\r?\n/).filter((line) => !isEmbeddedCredit(line) && !isLyricSectionLabel(line)).join("\n").trim();
   }, [plain]);
   const lyricLines = useMemo(() => lines.filter((line) => !isEmbeddedCredit(line.text || "")), [lines]);
   const timed = useMemo(() => {
@@ -78,7 +78,7 @@ export function Lyrics({
   }, [lyricLines, settings.lyr, durationSeconds, credit?.duration]);
   const normalized = useMemo<LyricLine[]>(() => {
     if (timed.length) return timed;
-    const text = plainText ? plainText.split(/\r?\n/) : lyricLines.filter((line) => !line.is_background).map((line) => line.text);
+    const text = plainText ? plainText.split(/\r?\n/) : lyricLines.filter((line) => !line.is_background && !isLyricSectionLabel(line.text || "")).map((line) => line.text);
     return text.filter((line) => line?.trim()).map((text) => ({ text, startTimeMs: null }));
   }, [timed, lyricLines, plainText]);
   const type = !timed.length ? "PLAIN" : timed.some((line) => line.syllables?.length) ? "SYLLABLE_SYNCED" : "LINE_SYNCED";

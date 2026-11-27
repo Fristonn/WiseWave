@@ -21,6 +21,7 @@ import (
 	"wisewave-runtime/internal/innertube"
 	"wisewave-runtime/internal/lyrics"
 	"wisewave-runtime/internal/models"
+	"wisewave-runtime/internal/search"
 )
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
@@ -201,6 +202,16 @@ func (m *Music) Search(query string) ([]models.Track, error) {
 		return nil, errors.New("Search is unavailable")
 	}
 	return tracks, nil
+}
+
+func (m *Music) SearchSongs(query, continuation string) (*search.SongPage, error) {
+	query = strings.TrimSpace(query)
+	if query == "" || len(query) > 512 || len(continuation) > 8192 {
+		return nil, errors.New("Invalid song search")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return m.client.MusicClient.SearchSongs(ctx, query, continuation)
 }
 
 func (m *Music) Suggestions(query string) ([]string, error) {

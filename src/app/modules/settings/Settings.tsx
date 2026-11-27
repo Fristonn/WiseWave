@@ -29,6 +29,7 @@ import { readZoom, setZoom, ZOOM_LEVELS } from "../../shared/zoom";
 import { Equalizer } from "./Equalizer";
 import { SettingsDropdown } from "./SettingsDropdown";
 import { DeleteConfirmation } from "../player/library/PlaylistMenu";
+import type { LibraryAddNotice } from "../player/library/useLibrary";
 import { YouTubeConnection, YouTubeIcon } from "../accounts/YouTube/YouTubeConnection";
 import { SpotifyConnection, SpotifyIcon } from "../accounts/Spotify/SpotifyConnection";
 
@@ -79,8 +80,8 @@ export interface SettingsProps {
   track?: Track | null;
   position?: number;
   duration?: number;
-  onImportSpotify?: (result: SpotifyImportResult) => number;
-  onImportYouTube?: (result: YouTubeImportResult) => number;
+  onImportSpotify?: (result: SpotifyImportResult) => LibraryAddNotice | undefined;
+  onImportYouTube?: (result: YouTubeImportResult) => LibraryAddNotice | undefined;
 }
 
 const DEFAULT_SETTINGS = {

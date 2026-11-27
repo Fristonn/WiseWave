@@ -23,6 +23,8 @@ export function Collection({
   onPlay,
   onArtist,
   onAlbum,
+  onAddTrack,
+  savedTrackIds,
   onBack,
   current = null,
   playing = false,
@@ -36,6 +38,8 @@ export function Collection({
   onPlay: (track: Track, tracks: Track[], options?: { collection?: boolean }) => void;
   onArtist: (track: Track) => void;
   onAlbum?: (id: string) => void;
+  onAddTrack?: (id: string, track: Track) => void;
+  savedTrackIds?: ReadonlySet<string>;
   current?: Track | null;
   playing?: boolean;
   children?: ReactNode;
@@ -84,7 +88,7 @@ export function Collection({
   }, [kind, playlist?.cover, tracks, coverFailed]);
   const playlistTheme = useImageTheme(playlistArtwork || null, DEFAULT_PLAYLIST_THEME);
 
-  if (kind === "playlist" && playlist) return <CatalogCollection kind="playlist" id={playlist.id} localData={{ id: playlist.id, title: playlist.name, description: playlist.description, artwork_url: playlist.cover || "", author: "", tracks }} onBack={onBack || (() => {})} onPlay={(track, queue) => onPlay(track, queue, { collection: true })} onArtist={onArtist} current={current} playing={playing} onCollectionMenu={(event) => openPlaylistMenu(event, playlist)} />;
+  if (kind === "playlist" && playlist) return <CatalogCollection kind="playlist" id={playlist.id} localData={{ id: playlist.id, title: playlist.name, description: playlist.description, artwork_url: playlist.cover || "", author: "", tracks }} onBack={onBack || (() => {})} onPlay={(track, queue) => onPlay(track, queue, { collection: true })} onArtist={onArtist} current={current} playing={playing} onCollectionMenu={(event) => openPlaylistMenu(event, playlist)} onAddSong={onAddTrack && ((track) => onAddTrack(playlist.id, track))} savedTrackIds={savedTrackIds} />;
 
   return (
     <section className={`view-enter collection collection-${kind}`}>

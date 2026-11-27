@@ -233,6 +233,11 @@ export interface Record {
   lines?: Line[];
 }
 
+export interface SongPage {
+  tracks: Track[];
+  continuation?: string;
+}
+
 export interface SponsorSegment {
   category: string;
   actionType: string;
@@ -457,6 +462,9 @@ export const Music = {
   },
   search(query: string): Promise<Track[]> {
     return call("Music.Search", query);
+  },
+  searchSongs(query: string, continuation: string): Promise<SongPage | null> {
+    return call("Music.SearchSongs", query, continuation);
   },
   sponsorSegments(id: string): Promise<SponsorSegment[]> {
     return call("Music.SponsorSegments", id);

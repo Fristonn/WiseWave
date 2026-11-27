@@ -515,10 +515,23 @@ export function useMusic() {
   useEffect(() => {
     if (!lyricsTrackID) return;
     let active = true;
-    void Music.lyrics(lyricsTitle, lyricsArtist, lyricsAlbum, lyricsDuration, lyricsTrackID).then((record) => {
-      if (active) setLyricsResult({ key: lyricsKey, record });
-    }).catch(() => { if (active) setLyricsResult({ key: lyricsKey, record: null }); });
-    return () => { active = false; };
+    let timer: number | undefined;
+    let lastLyrics = "";
+    const read = (attempt: number) => {
+      void Music.lyrics(lyricsTitle, lyricsArtist, lyricsAlbum, lyricsDuration, lyricsTrackID).then((record) => {
+        if (!active) return;
+        const content = record ? JSON.stringify({ ...record, refining: false }) : "";
+        if (attempt === 0 || (record && content !== lastLyrics)) {
+          lastLyrics = content;
+          setLyricsResult({ key: lyricsKey, record });
+        }
+        if (record?.refining && attempt < 10) timer = window.setTimeout(() => read(attempt + 1), 1250);
+      }).catch(() => {
+        if (active && attempt === 0) setLyricsResult({ key: lyricsKey, record: null });
+      });
+    };
+    read(0);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [lyricsKey, lyricsTrackID, lyricsTitle, lyricsArtist, lyricsAlbum, lyricsDuration]);
 
   const loadRadioPage = useCallback((seed: string): Promise<void> => {

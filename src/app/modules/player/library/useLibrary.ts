@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Music, type Track } from "../../../mygo";
+import { useSnackbar } from "../../../shared/ui/Snackbar";
 import { formatDurationSeconds, trackDurationSeconds, withTrackDuration } from "../shared/trackDuration";
 
 export type LibraryTrack = Track & { addedAt?: string };
 export type Playlist = { id: string; name: string; description: string; cover?: string; tracks: LibraryTrack[] };
+export type LibraryAddNotice = { text: "added to"; title: string; artwork: string; textSuffix: string };
 type Data = { liked: LibraryTrack[]; playlists: Playlist[] };
 const key = "wisewave-library";
+
+function addedNotice(title: string, artwork: string, destination: string): LibraryAddNotice {
+  return { text: "added to", title, artwork, textSuffix: destination };
+}
 
 function durationSeconds(track: Track): number {
   return trackDurationSeconds(track);
@@ -94,19 +100,24 @@ function read(onError?: (message: string) => void): Data {
 export function useLibrary() {
   const loadError = useRef("");
   const [data, setData] = useState(() => read((message) => { loadError.current = message; }));
+  const currentData = useRef(data);
   const [error, setError] = useState(loadError.current);
+  const notify = useSnackbar();
   const durationSyncRequested = useRef(new Set<string>());
-  const update = (change: (current: Data) => Data) => setData((current) => {
-    const next = change(current);
+  const update = (change: (current: Data) => Data) => {
+    const next = change(currentData.current);
+    if (next === currentData.current) return true;
     try {
       localStorage.setItem(key, JSON.stringify(next));
+      currentData.current = next;
+      setData(next);
       setError("");
-      return next;
+      return true;
     } catch {
       setError("couldn't save your library changes");
-      return current;
+      return false;
     }
-  });
+  };
   useEffect(() => {
     const tracks = [...new Map([...data.liked, ...data.playlists.flatMap((playlist) => playlist.tracks)]
       .filter((track) => !durationSeconds(track) && !durationSyncRequested.current.has(track.id))
@@ -141,23 +152,30 @@ export function useLibrary() {
     };
     void Promise.all(Array.from({ length: Math.min(2, tracks.length) }, sync));
   }, [data.liked, data.playlists]);
-  const toggleLike = (track: Track) => update((current) => ({
-    ...current,
-    liked: current.liked.some((item) => item.id === track.id)
-      ? current.liked.filter((item) => item.id !== track.id)
-      : [withLibraryMeta(track), ...current.liked],
-  }));
-  const create = (name: string, description: string, cover?: string) => {
-    const playlist = { id: crypto.randomUUID(), name, description, cover, tracks: [] as LibraryTrack[] };
-    update((current) => ({ ...current, playlists: [playlist, ...current.playlists] }));
+  const toggleLike = (track: Track, onAdded: (notice: LibraryAddNotice) => void = notify) => {
+    const alreadyLiked = currentData.current.liked.some((item) => item.id === track.id);
+    const saved = update((current) => ({
+      ...current,
+      liked: alreadyLiked ? current.liked.filter((item) => item.id !== track.id) : [withLibraryMeta(track), ...current.liked],
+    }));
+    if (saved && !alreadyLiked) onAdded(addedNotice(track.title, track.album_art_url, "Liked Songs"));
+  };
+  const create = (name: string, description: string, cover?: string, track?: Track) => {
+    const playlist: Playlist = { id: crypto.randomUUID(), name, description, cover, tracks: track ? [withLibraryMeta(track)] : [] };
+    if (update((current) => ({ ...current, playlists: [playlist, ...current.playlists] })) && track) {
+      notify(addedNotice(track.title, track.album_art_url, name));
+    }
     return playlist;
   };
-  const add = (id: string, track: Track) => update((current) => ({
-    ...current,
-    playlists: current.playlists.map((playlist) => playlist.id === id && !playlist.tracks.some((item) => item.id === track.id)
-      ? { ...playlist, tracks: [...playlist.tracks, withLibraryMeta(track)] }
-      : playlist),
-  }));
+  const add = (id: string, track: Track) => {
+    const playlist = currentData.current.playlists.find((item) => item.id === id);
+    if (!playlist || playlist.tracks.some((item) => item.id === track.id)) return;
+    const saved = update((current) => ({
+      ...current,
+      playlists: current.playlists.map((item) => item === playlist ? { ...item, tracks: [...item.tracks, withLibraryMeta(track)] } : item),
+    }));
+    if (saved) notify(addedNotice(track.title, track.album_art_url, playlist.name));
+  };
   const remove = (id: string, track: Track) => update((current) => ({
     ...current,
     playlists: current.playlists.map((playlist) => playlist.id === id
@@ -191,27 +209,29 @@ export function useLibrary() {
     const incoming = (Array.isArray(payload.tracks) ? payload.tracks : [])
       .filter((track) => track?.id)
       .map((track) => withLibraryMeta(track));
-    const next = ((current: Data) => {
+    const current = read(setError);
+    const provider = payload.provider || "spotify";
+    const id = `${provider}:${payload.sourceId}`;
+    const existing = current.playlists.find((playlist) => playlist.id === id);
+    const destination = payload.liked ? "Liked Songs" : payload.title || existing?.name || "Imported playlist";
+    const seen = new Set((payload.liked ? current.liked : existing?.tracks ?? []).map((track) => track.id));
+    const added = incoming.filter((track) => {
+      if (seen.has(track.id)) return false;
+      seen.add(track.id);
+      return true;
+    });
+    const next = (() => {
       if (payload.liked) {
-        const seen = new Set(current.liked.map((track) => track.id));
         const updates = new Map(incoming.map((track) => [track.id, track]));
-        const added = incoming.filter((track) => {
-          if (seen.has(track.id)) return false;
-          seen.add(track.id);
-          return true;
-        });
         const existing = current.liked.map((track) => {
           const refreshed = updates.get(track.id);
           return refreshed ? withLibraryMeta({ ...track, ...refreshed }, track.addedAt) : track;
         });
         return { ...current, liked: [...added, ...existing] };
       }
-      const provider = payload.provider || "spotify";
-      const id = `${provider}:${payload.sourceId}`;
-      const existing = current.playlists.find((playlist) => playlist.id === id);
       const playlist: Playlist = {
         id,
-        name: payload.title || existing?.name || "Imported playlist",
+        name: destination,
         description: existing?.description || `Imported from ${provider === "youtube" ? "YouTube Music" : "Spotify"}`,
         cover: payload.cover || existing?.cover,
         tracks: incoming,
@@ -222,15 +242,11 @@ export function useLibrary() {
           ? current.playlists.map((item) => (item.id === id ? playlist : item))
           : [playlist, ...current.playlists],
       };
-    })(read(setError));
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-      setData(next); setError("");
-    } catch {
-      setError("couldn't save your library changes");
-      throw new Error("couldn't save your library changes");
-    }
-    return incoming.length;
+    })();
+    if (!update(() => next)) throw new Error("couldn't save your library changes");
+    if (!added.length) return;
+    const title = added.length === 1 ? added[0].title : `${added.length} songs`;
+    return addedNotice(title, added.find((track) => track.album_art_url)?.album_art_url || "", destination);
   };
   return { ...data, error, clearError: () => setError(""), toggleLike, create, add, remove, edit, removePlaylist, ensureDuration, importCollection };
 }

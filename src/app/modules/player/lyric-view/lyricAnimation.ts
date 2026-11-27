@@ -1,6 +1,6 @@
 import type { LyricLine } from '../../../types/lyricRenderer';
 import type { PlaybackClock } from './playbackClock';
-import { splitLyricGraphemes } from './renderer/textSegments';
+import { splitLyricGraphemes } from './textSegments';
 import { createLyricScrollMotion, createLyricWordMotion, syncLyricEffect, type LyricEffect } from './lyricMotion';
 
 const MASK_FADE_PX = 100;
@@ -114,7 +114,10 @@ export function findActiveLyricIndex(lines: LyricLine[], position: number, endTi
       if ((lines[middle].startTimeMs ?? Infinity) <= position) low = middle + 1;
       else high = middle;
     }
-    return low - 1;
+    const index = low - 1;
+    const line = lines[index];
+    if (line?.followedBySectionCue && position >= (line.endTimeMs ?? Infinity)) return -1;
+    return index;
   }
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];

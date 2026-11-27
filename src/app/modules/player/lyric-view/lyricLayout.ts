@@ -1,8 +1,16 @@
 import type { Line } from "../../../mygo";
 import type { LyricLine } from "../../../types/lyricRenderer";
 
+export function isLyricSectionLabel(text: string): boolean {
+  const label = text.trim().match(/^(?:\(([^()]+)\)|\[([^\[\]]+)\])$/u);
+  if (!label) return false;
+  const section = /^(?:intro(?:duction|dução)?|verse|pre[- ]?chorus|chorus|post[- ]?chorus|refrain|hook|bridge|interlude|instrumental(?: break)?|beat break|breakdown|drop|outro|verso|pré[- ]?refrão|refrão|ponte)\s*(?:\d+|[ivx]+)?$/iu;
+  return (label[1] ?? label[2]).split(":", 1)[0].split("/").every((part) => section.test(part.trim()));
+}
+
 export function normalizeLyricLines(rawLines: Line[], durationMs = Infinity): LyricLine[] {
   const ordered = rawLines.map((raw) => {
+    const sectionLabel = isLyricSectionLabel(raw.text || "");
     const backgroundOnly = raw.syllables?.some(unit => unit.is_background)
       ? raw.syllables.every(unit => unit.is_background)
       : Boolean(raw.is_background);
@@ -11,16 +19,24 @@ export function normalizeLyricLines(rawLines: Line[], durationMs = Infinity): Ly
     const leadStart = raw.start_time_ms === 0 && firstLead && Number.isFinite(firstLead.start_time_ms) &&
       firstLead.start_time_ms > 0 && firstLead.start_time_ms < durationMs ? firstLead.start_time_ms : raw.start_time_ms;
     const start = timedBackground?.length ? Math.min(...timedBackground.map(unit => unit.start_time_ms)) : leadStart;
-    return { raw, backgroundOnly, timedBackground, start };
+    return { raw, backgroundOnly, timedBackground, start, sectionLabel };
   }).filter(({ start }) => Number.isFinite(start) && start >= 0 && start < durationMs)
     .sort((a, b) => a.start - b.start);
   let nextLeadStart: number | undefined;
   const nextStarts = ordered.map(() => 0);
+  const nextIsSection = ordered.map(() => false);
+  let nextLeadIsSection = false;
   for (let index = ordered.length - 1; index >= 0; index--) {
     nextStarts[index] = nextLeadStart ?? ordered[index].start;
-    if (!ordered[index].backgroundOnly) nextLeadStart = ordered[index].start;
+    nextIsSection[index] = nextLeadIsSection;
+    const line = ordered[index];
+    if (!line.backgroundOnly && (!line.sectionLabel || line.start > 0)) {
+      nextLeadStart = line.start;
+      nextLeadIsSection = line.sectionLabel;
+    }
   }
-  const lines = ordered.map(({ raw, backgroundOnly, timedBackground, start }, index) => {
+  const lines = ordered.flatMap(({ raw, backgroundOnly, timedBackground, start, sectionLabel }, index) => {
+    if (sectionLabel) return [];
     const nextStart = nextStarts[index];
     const instrumental = !raw.text?.trim() || raw.text.trim() === "\u266a";
     const inferredEnd = nextStart > start && (instrumental || nextStart - start <= 6000) ? nextStart : start + 4500;
@@ -28,14 +44,17 @@ export function normalizeLyricLines(rawLines: Line[], durationMs = Infinity): Ly
       ? Math.max(...timedBackground.map(unit => unit.end_time_ms))
       : raw.end_time_ms > start ? raw.end_time_ms : raw.syllables?.at(-1)?.end_time_ms ?? 0;
     const validEnd = Number.isFinite(suppliedEnd) && suppliedEnd > start && suppliedEnd <= durationMs + 2000;
-    const end = Math.min(durationMs, Math.max(start + 100, validEnd ? suppliedEnd : inferredEnd));
+    const followedBySectionCue = nextIsSection[index] && nextStart > start;
+    const cueBoundary = followedBySectionCue && !raw.syllables?.length ? nextStart : Infinity;
+    const end = Math.min(durationMs, cueBoundary, Math.max(start + 100, validEnd ? suppliedEnd : inferredEnd));
     const units = raw.syllables;
     const validUnits = units?.every((unit, unitIndex) => Number.isFinite(unit.start_time_ms) && unit.start_time_ms >= (unit.is_background ? 0 : start) &&
       unit.start_time_ms < end && (unitIndex === 0 || unit.start_time_ms >= units[unitIndex - 1].start_time_ms));
-    return {
+    return [{
       startTimeMs: start,
       endTimeMs: end,
       text: instrumental ? "" : raw.text,
+      followedBySectionCue,
       isBackground: backgroundOnly,
       transliteration: raw.transliteration,
       syllables: instrumental || !validUnits ? undefined : units?.map((unit, unitIndex) => {
@@ -50,7 +69,7 @@ export function normalizeLyricLines(rawLines: Line[], durationMs = Infinity): Ly
         };
       }),
       accompanimentLines: [] as LyricLine[],
-    };
+    }];
   });
   const main = lines.filter(line => !line.isBackground);
   if (!main.length) return lines.map(line => ({ ...line, isBackground: false }));

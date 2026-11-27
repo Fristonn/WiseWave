@@ -1,7 +1,7 @@
 import type { Track } from "../../../mygo";
 
 export function artistNames(artist: string) {
-  return artist.split(/\s*(?:,|\s+&\s+|\s+(?:feat\.?|ft\.?|featuring)\s+)\s*/i).map((name) => name.trim()).filter(Boolean);
+  return artist.split(/\s*(?:,|\s+(?:feat\.?|ft\.?|featuring)\s+)\s*/i).map((name) => name.trim()).filter(Boolean);
 }
 
 export function ArtistLinks({ track, onOpen }: { track: Track; onOpen: (track: Track) => void }) {

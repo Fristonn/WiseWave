@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ListFilter, ListMusic, Plus, Search } from "lucide-react";
 import type { LibraryTrack, Playlist } from "./useLibrary";
-import { Artwork } from "../../../shared/ui/Artwork";
+import { PlaylistArtwork } from "./PlaylistArtwork";
 import { Tooltip } from "../../../shared/ui/Tooltip";
 import { IconButton } from "../../../shared/ui/IconButton";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
@@ -99,7 +99,7 @@ export function Library({ width, liked, playlists, active, onOpen, onCreate, dow
         </span>
       </button>
     </div>
-    <nav className="library-list player-scroll" aria-label="Playlists">{visible.length ? visible.map((playlist) => <button className="library-item" type="button" aria-current={active === playlist.id ? "page" : undefined} key={playlist.id} onContextMenu={(event) => openPlaylistMenu(event, playlist)} onClick={() => onOpen(playlist.id)}><span className="playlist-cover">{playlist.cover ? /^(data:|blob:)/i.test(playlist.cover) ? <img src={playlist.cover} alt="" /> : <Artwork src={playlist.cover} size={48} /> : <ListMusic size={20} />}</span><span className="library-item-copy"><MarqueeText className="library-item-title">{playlist.name}</MarqueeText><MarqueeText className="library-item-meta">{tracksMeta(playlist.tracks)}</MarqueeText></span></button>) : <div className="library-empty"><ListMusic size={24} /><strong>no playlists found</strong><span>{query ? "try another search" : "create a playlist to get started"}</span></div>}</nav>
+    <nav className="library-list player-scroll" aria-label="Playlists">{visible.length ? visible.map((playlist) => <button className="library-item" type="button" aria-current={active === playlist.id ? "page" : undefined} key={playlist.id} onContextMenu={(event) => openPlaylistMenu(event, playlist)} onClick={() => onOpen(playlist.id)}><span className="playlist-cover">{playlist.cover ? <PlaylistArtwork src={playlist.cover} size={48} /> : <ListMusic size={20} />}</span><span className="library-item-copy"><MarqueeText className="library-item-title">{playlist.name}</MarqueeText><MarqueeText className="library-item-meta">{tracksMeta(playlist.tracks)}</MarqueeText></span></button>) : <div className="library-empty"><ListMusic size={24} /><strong>no playlists found</strong><span>{query ? "try another search" : "create a playlist to get started"}</span></div>}</nav>
     {creating && <PlaylistDialog onClose={() => setCreating(false)} onCreate={(name, description, cover) => { onCreate(name, description, cover); setCreating(false); }} />}
 
   </aside>;

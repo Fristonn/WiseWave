@@ -4,6 +4,7 @@ import { MiniWindow, type Track } from "../../../mygo";
 import { ArtistLinks } from "../shared/ArtistLinks";
 import { Artwork } from "../../../shared/ui/Artwork";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
+import { useSnackbar } from "../../../shared/ui/Snackbar";
 import { Tooltip } from "../../../shared/ui/Tooltip";
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "../../../shared/ui/icons";
 import { PlayerAlert } from "../shared/PlayerAlert";
@@ -262,6 +263,7 @@ function PlayerSlider({
 }
 
 export function MiniPlayer() {
+  const notify = useSnackbar();
   const [state, setState] = useState(empty);
   const [error, setError] = useState("");
   const [hovered, setHovered] = useState(false);
@@ -294,6 +296,12 @@ export function MiniPlayer() {
     channel.current = bus;
     bus.onmessage = (event) => {
       if (event.data?.type === "state") setState(event.data.state);
+      if (event.data?.type === "library-added") {
+        const { text, title, artwork, textSuffix } = event.data.notice ?? {};
+        if (text === "added to" && typeof title === "string" && typeof artwork === "string" && typeof textSuffix === "string") {
+          notify({ text, title, artwork, textSuffix });
+        }
+      }
     };
     bus.postMessage({ type: "request" });
     const closed = () => bus.postMessage({ type: "closed" });
@@ -319,7 +327,7 @@ export function MiniPlayer() {
       bus.close();
       channel.current = null;
     };
-  }, []);
+  }, [notify]);
 
   const send = (action: string, value?: number) => {
     channel.current?.postMessage({ type: "action", action, value, trackId: state.track?.id });

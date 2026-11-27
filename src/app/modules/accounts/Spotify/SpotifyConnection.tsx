@@ -10,6 +10,7 @@ import { Classic } from "../../../shared/ui/Classic";
 import { Artwork } from "../../../shared/ui/Artwork";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import { PlayerAlert } from "../../player/shared/PlayerAlert";
+import type { LibraryAddNotice } from "../../player/library/useLibrary";
 import spotifyLikedSongsArt from "../../../../../resources/images/liked-songs.png";
 export function SpotifyIcon({ size = 18 }: { size?: number }) {
   return (
@@ -19,7 +20,7 @@ export function SpotifyIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:SpotifyImportResult)=>number}) {
+export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:SpotifyImportResult)=>LibraryAddNotice | undefined}) {
  const [note,setNote]=useState("");
  const dismissNote=useCallback(()=>setNote(""),[]);
   const [spotifyLinked, setSpotifyLinked] = useState<boolean | null>(() => spotifyCard.getAccount()?.linked ?? null);
@@ -126,8 +127,8 @@ export function SpotifyConnection({onImportSpotify}:{onImportSpotify?:(result:Sp
     reportAccountImport({provider:"spotify",phase:"start",source:sourceId});
     setSpotifyImportingId(sourceId);
     void SpotifyAccount.import(sourceId).then((result) => {
-      onImportSpotify(result);
-      reportAccountImport({provider:"spotify",phase:"complete",matched:result.matched,total:result.total});
+      const notice = onImportSpotify(result);
+      reportAccountImport({provider:"spotify",phase:"complete",matched:result.matched,total:result.total,notice});
       setSpotifyImportingId(null);
       setSpotifyModalClosing(true);
       if (spotifyModalTimer.current) window.clearTimeout(spotifyModalTimer.current);

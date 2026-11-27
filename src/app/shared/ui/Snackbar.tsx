@@ -2,8 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { createPortal } from "react-dom";
 import { LoaderCircle, X } from "lucide-react";
 import { feedbackText } from "../feedbackText";
+import { Artwork } from "./Artwork";
 
-type SnackbarSpec = { preservePunctuation?: boolean; key?: string; text: string; duration?: number; loading?: boolean; progress?: number | null; progressLabel?: string; accent?: string; action?: { label: string; onClick: () => void }; onDismiss?: () => void };
+type SnackbarSpec = { preservePunctuation?: boolean; key?: string; text: string; title?: string; textSuffix?: string; artwork?: string; duration?: number; loading?: boolean; progress?: number | null; progressLabel?: string; accent?: string; action?: { label: string; onClick: () => void }; onDismiss?: () => void };
 type SnackbarItem = SnackbarSpec & { id: number; slot: string };
 const SnackbarContext = createContext<((spec: SnackbarSpec) => void) | null>(null);
 
@@ -57,7 +58,12 @@ function SnackbarToast({ item, remove }: { item: SnackbarItem; remove: (slot: st
     <div className="snackbar" data-leaving={leaving || undefined} role="status" aria-live={item.duration === -2 ? "off" : "polite"}>
       {hasProgress && <ProgressBorder value={item.progress ?? null} accent={item.accent} />}
       {item.loading && <LoaderCircle className="snackbar-loader" size={18} aria-hidden="true" />}
-      <span className="snackbar-text"><span>{item.text}</span>{hasProgress && <span className="snackbar-progress-meta" role="progressbar" aria-label={item.text} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress == null ? undefined : Math.round(item.progress * 100)} aria-valuetext={item.progressLabel}>{item.progressLabel}</span>}</span>
+      {item.artwork && <Artwork className="snackbar-artwork" src={item.artwork} size={40} />}
+      <span className={`snackbar-text${item.title ? " snackbar-titled-text" : ""}`}>
+        {item.title && <strong className="snackbar-title" title={item.title}>{item.title}</strong>}
+        <span className={item.title ? "snackbar-detail" : undefined} title={item.title ? item.text : undefined}>{item.text}</span>
+        {hasProgress && <span className="snackbar-progress-meta" role="progressbar" aria-label={item.text} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress == null ? undefined : Math.round(item.progress * 100)} aria-valuetext={item.progressLabel}>{item.progressLabel}</span>}
+      </span>
       {item.action && <button type="button" className="snackbar-action" onClick={() => { item.action?.onClick(); dismiss(); }}>{item.action.label}</button>}
       <button type="button" className="snackbar-close" aria-label="dismiss" onClick={dismiss}><X size={20} /></button>
     </div>
@@ -71,7 +77,8 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
   const show = useCallback((spec: SnackbarSpec) => {
     const slot = spec.key || "notification";
     const previous = current.current.get(slot);
-    const next = { ...spec, text: feedbackText(spec.text, spec.preservePunctuation), progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: ++nextId.current };
+    const text = [feedbackText(spec.text, spec.preservePunctuation), spec.textSuffix].filter(Boolean).join(" ");
+    const next = { ...spec, text, progressLabel: spec.progressLabel ? feedbackText(spec.progressLabel) : undefined, action: spec.action ? { ...spec.action, label: feedbackText(spec.action.label) } : undefined, slot, id: ++nextId.current };
     current.current.set(slot, next);
     setItems(Array.from(current.current.values()));
     if (!spec.key) previous?.onDismiss?.();

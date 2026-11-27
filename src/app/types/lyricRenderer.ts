@@ -12,6 +12,7 @@ export interface LyricLine {
   startTimeMs: number | null;
   endTimeMs?: number;
   text: string;
+  followedBySectionCue?: boolean;
   isBackground?: boolean;
   transliteration?: string;
   syllables?: LyricSyllable[];

@@ -1,3 +1,13 @@
+## 0.2.3
+
+* custom playlist artwork now shows on the playlist page
+* search for songs and add them directly from your playlists
+* play recommended songs, open song menus, and jump to artist pages
+* recommendations refill as you save songs and stay visible while refreshing
+* adding songs to a playlist or liked songs shows a confirmation with artwork
+* artist links handle names that include an ampersand
+* lyrics can switch to a better matched version when it becomes available
+
 ## 0.2.2
 
 * the queue continues when a song ends in the background

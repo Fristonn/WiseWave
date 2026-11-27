@@ -1,4 +1,5 @@
 import { CatalogCollection } from "./CatalogCollection";
+import { cachedMix, clearRelatedTracks, loadMix } from "../shared/relatedTracks";
 import { ExplicitBadge } from "../shared/ExplicitBadge";
 import { Classic } from "../../../shared/ui/Classic";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -343,24 +344,6 @@ function FeedSection({ title, description, count, children, empty, onNearEnd, no
   return <section className="feed"><div className="feed-heading"><div className="feed-heading-copy"><h2>{title}</h2><span>{description}</span></div>{(actions || !noNav) && <div className="feed-heading-actions">{actions}{!noNav && <div className="row-navigation"><button type="button" aria-label={`Scroll ${title} left`} disabled={!available.left} onClick={() => scroll(-1)}><ChevronLeft size={20} /></button><button type="button" aria-label={`Scroll ${title} right`} disabled={!available.right} onClick={() => scroll(1)}><ChevronRight size={20} /></button></div>}</div>}</div>{count ? children(rowRef) : empty}</section>;
 }
 
-const mixCache = new Map<string, Track[]>();
-const mixRequests = new Map<string, Promise<Track[]>>();
-
-export function loadMix(track: Track) {
-  const cached = mixCache.get(track.id);
-  if (cached) return Promise.resolve(cached);
-  const pending = mixRequests.get(track.id);
-  if (pending) return pending;
-  const request = Music.related(track.id).then((tracks) => {
-    const items = [track, ...tracks.filter((item) => item.id !== track.id)];
-    if (mixCache.size >= 64 && !mixCache.has(track.id)) mixCache.delete(mixCache.keys().next().value!);
-    mixCache.set(track.id, items);
-    return items;
-  }).finally(() => mixRequests.delete(track.id));
-  mixRequests.set(track.id, request);
-  return request;
-}
-
 const DISCOVER_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const DISCOVER_STORAGE_KEY = "wisewave-discover-cache";
 
@@ -662,14 +645,9 @@ function FeedContent({ history, popular, forYou, searchResults, albumResults = [
   }, [refreshDiscover]);
 
 
-  const [mixTracks, setMixTracks] = useState<Track[]>(() => {
-    if (mix && mixCache.has(mix.id)) {
-      return mixCache.get(mix.id)!;
-    }
-    return [];
-  });
+  const [mixTracks, setMixTracks] = useState<Track[]>(() => (mix && cachedMix(mix)) || []);
   const [mixError, setMixError] = useState("");
-  const [mixLoading, setMixLoading] = useState(() => Boolean(mix && !mixCache.has(mix.id)));
+  const [mixLoading, setMixLoading] = useState(() => Boolean(mix && !cachedMix(mix)));
   const [mixRetry, setMixRetry] = useState(0);
 
   useEffect(() => {
@@ -693,14 +671,15 @@ function FeedContent({ history, popular, forYou, searchResults, albumResults = [
 
   useEffect(() => {
     if (!mix) return;
-    if (mixRetry === 0 && mixCache.has(mix.id)) {
-      setMixTracks(mixCache.get(mix.id)!);
+    const cached = mixRetry === 0 && cachedMix(mix);
+    if (cached) {
+      setMixTracks(cached);
       setMixLoading(false);
       setMixError("");
       return;
     }
     let active = true;
-    if (mixRetry > 0) mixCache.delete(mix.id);
+    if (mixRetry > 0) clearRelatedTracks(mix.id);
     setMixTracks([]); setMixError(""); setMixLoading(true);
     loadMix(mix).then((full) => {
       if (active) setMixTracks(full);

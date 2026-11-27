@@ -13,9 +13,10 @@ export interface MarqueeTextProps {
   className?: string;
   title?: string;
   speed?: number;
+  tooltip?: boolean;
 }
 
-export function MarqueeText({ children, className = "", title, speed }: MarqueeTextProps) {
+export function MarqueeText({ children, className = "", title, speed, tooltip = true }: MarqueeTextProps) {
   const viewportRef = useRef<HTMLSpanElement>(null);
   const contentRef = useRef<HTMLSpanElement>(null);
   const [overflow, setOverflow] = useState(0);
@@ -60,10 +61,11 @@ export function MarqueeText({ children, className = "", title, speed }: MarqueeT
   const autoTitle = title ?? (typeof children === "string" ? children : undefined);
 
   return (
-    <Tooltip label={autoTitle || ""} enabled={overflow > 1 && Boolean(autoTitle)}>
+    <Tooltip label={autoTitle || ""} enabled={tooltip && overflow > 1 && Boolean(autoTitle)}>
       <span
         className={`player-marquee ${overflow > 1 ? "player-marquee-active" : ""} ${className}`}
         ref={viewportRef}
+        title={!tooltip ? autoTitle : undefined}
       >
         <span
           className="player-marquee-content"

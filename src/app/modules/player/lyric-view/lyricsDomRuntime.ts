@@ -1,3 +1,4 @@
+// @ts-nocheck
 function __decorate(decorators, target, key, desc) {
   var c = arguments.length,
     r =
@@ -946,6 +947,7 @@ export {
   x as html,
   b as svg,
   i$3 as css,
+  r$4 as unsafeCSS,
   __decorate as decorate,
   n as property,
   r as state,

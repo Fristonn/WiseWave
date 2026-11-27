@@ -9,6 +9,8 @@ import (
 	"wisewave-runtime/internal/search"
 )
 
+const songSearchParams = "EgWKAQIIAWoKEAkQBRAKEAMQBA=="
+
 type SearchFilter struct {
 	Label  string `json:"label,omitempty"`
 	Params string `json:"params,omitempty"`
@@ -30,6 +32,36 @@ type SearchResult struct {
 type SearchSuggestions struct {
 	Queries []string    `json:"queries"`
 	Items   []MusicItem `json:"items,omitempty"`
+}
+
+func (client *MusicClient) SearchSongs(ctx context.Context, query, token string) (*search.SongPage, error) {
+	var result *SearchResult
+	var err error
+	if token == "" {
+		result, err = client.Search(ctx, query, SearchOptions{Params: songSearchParams})
+	} else {
+		result, err = client.ContinueSearch(ctx, token, query)
+	}
+	if err != nil {
+		return nil, err
+	}
+	tracks := make([]models.Track, 0, len(result.Items))
+	for _, item := range result.Items {
+		if item.Kind != KindTrack || !item.IsTrack() || item.Title == "" {
+			continue
+		}
+		artist := item.Artists
+		if artist == "" {
+			artist = item.Artist
+		}
+		tracks = append(tracks, models.Track{
+			ID: item.VideoID, Title: item.Title, Artist: artist, ArtistID: item.ArtistID(),
+			Album: item.Album, AlbumID: item.AlbumID, Duration: item.Duration,
+			DurationSeconds: parseDurationSeconds(item.Duration), AlbumArtURL: UpgradeArtworkURL(item.Thumbnail),
+			IsExplicit: item.IsExplicit,
+		})
+	}
+	return &search.SongPage{Tracks: tracks, Continuation: result.ContinuationToken}, nil
 }
 
 func (client *MusicClient) Search(ctx context.Context, query string, options SearchOptions) (*SearchResult, error) {

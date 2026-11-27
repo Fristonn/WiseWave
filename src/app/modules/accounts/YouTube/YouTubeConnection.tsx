@@ -9,6 +9,7 @@ import { YouTubeAccount, YouTubeLogin, events, type YouTubeAccountStatus, type Y
 import { reportAccountImport } from "../shared/ImportProgress";
 import { MarqueeText } from "../../../shared/ui/MarqueeText";
 import { PlayerAlert } from "../../player/shared/PlayerAlert";
+import type { LibraryAddNotice } from "../../player/library/useLibrary";
 import { AccountLibraryDialog } from "../shared/AccountLibraryDialog";
 import { feedbackText } from "../../../shared/feedbackText";
 
@@ -16,7 +17,7 @@ export function YouTubeIcon({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 26 26" fill="none" aria-hidden="true"><path d="M13 26C20.176 26 26 20.176 26 13S20.176 0 13 0 0 5.824 0 13s5.824 13 13 13Z" fill="#f03" /><path d="M20.5 13a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" stroke="#fff" /><path d="m17.75 13-7.5-4.25v8.5z" fill="#fff" /></svg>;
 }
 
-export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImportResult) => number }) {
+export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImportResult) => LibraryAddNotice | undefined }) {
   const [account, setAccount] = useState<YouTubeAccountStatus | null>(youtubeCard.getAccount);
   const [login, setLogin] = useState<YouTubeLoginStatus>({ busy: false, error: "" });
   const [sync, setSync] = useState<YouTubeSyncStatus | null>(youtubeCard.getSync);
@@ -91,8 +92,8 @@ export function YouTubeConnection({ onImport }: { onImport?: (result: YouTubeImp
     setImporting(source); setError("");
     try {
       const result = await YouTubeAccount.import(source);
-      onImport(result);
-      reportAccountImport({provider:"youtube",phase:"complete",matched:result.matched,total:result.total});
+      const notice = onImport(result);
+      reportAccountImport({provider:"youtube",phase:"complete",matched:result.matched,total:result.total,notice});
       if (mounted.current) {
         setImporting(null);
         setClosing(true);

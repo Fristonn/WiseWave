@@ -115,7 +115,7 @@ func parseByline(value interface{}) byline {
 			result.album, result.albumID = text, id
 		}
 	}
-	result.artist = strings.Join(artists, " & ")
+	result.artist = strings.Join(artists, ", ")
 	if result.artist == "" {
 		first := strings.TrimSpace(strings.Split(textValue(value), " • ")[0])
 		if first != "Song" && first != "Video" && first != "Album" && first != "Single" && first != "EP" && !yearPattern.MatchString(first) && !strings.Contains(first, ":") && result.albumID == "" {

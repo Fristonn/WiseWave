@@ -26,12 +26,22 @@ interface RendererLine {
   timestamp: number;
   endtime: number;
   isWordSynced: boolean;
+  followedBySectionCue?: boolean;
 }
 
-interface LyricsElement extends HTMLElement {
-  focusPosition?: number;
+interface RendererState {
   currentTime: number;
   reducedMotion: boolean;
+  noAutoAlternates: boolean;
+  noBlur: boolean;
+  autoScroll: boolean;
+  interpolate: boolean;
+  isLoading: boolean;
+  lyrics: RendererLine[];
+}
+
+interface LyricsElement extends HTMLElement, RendererState {
+  focusPosition?: number;
   updateComplete: Promise<boolean>;
   resumeFollowing: () => void;
   syncWordWipes: (time: number) => void;
@@ -43,7 +53,7 @@ let rendererPromise: Promise<void> | undefined;
 function loadRenderer() {
   if (customElements.get("wisewave-lyrics")) return Promise.resolve();
   if (rendererPromise) return rendererPromise;
-  rendererPromise = import("./renderer/lyricsRuntime")
+  rendererPromise = import("./lyricsWebComponent")
     .then(() => {
       if (customElements.get("wisewave-lyrics")) return;
       const Renderer = customElements.get("am-lyrics");
@@ -127,6 +137,7 @@ function buildLines(lines: LyricLine[], wordSynced: boolean, duration: number): 
       timestamp: line.startTimeMs ?? 0,
       endtime: end,
       isWordSynced: wordSynced && Boolean(line.syllables?.length),
+      followedBySectionCue: line.followedBySectionCue,
     };
   });
 }
@@ -273,12 +284,10 @@ export default function NativeLyricsRenderer({
           isLoading: false,
           lyrics: buildLines(displayedLines, wordSynced, track.duration),
           currentTime: clock.isReady() ? clock.read() : 0,
-        });
+        } satisfies RendererState);
 
         renderer.setAttribute("highlight-color", "#fff");
         renderer.setAttribute("data-lenis-prevent", "");
-        renderer.style.cssText =
-          "display:block;height:100%;width:100%;font-family:inherit;font-weight:800;";
         renderer.addEventListener("line-click", onLineClick);
         renderer.addEventListener("lyric-following-change", onFollowingChange);
 
@@ -288,10 +297,6 @@ export default function NativeLyricsRenderer({
 
         if (focus) renderer.shadowRoot?.querySelector(".lyrics-container")?.classList.add("focus-mode");
 
-        const style = document.createElement("style");
-        style.textContent =
-          ".lyrics-footer>.footer-content{display:none}.lyrics-footer{visibility:visible;pointer-events:auto;filter:none!important;opacity:1!important}.lyrics-credit{font:500 13px/1.6 sans-serif;color:#ffffffa6}.lyrics-credit a{color:inherit;text-decoration:underline;text-underline-offset:3px}:host .lyrics-container{height:100%;max-height:100%;background:transparent;--lyplus-font-size-base:var(--lyrics-font-size,40px);--lyplus-padding-line:0px;--am-lyrics-inline-padding:var(--lyrics-inline-padding,40px);--am-lyrics-line-spacing:38px;--am-lyrics-line-height:1.2}";
-        renderer.shadowRoot?.append(style);
         setFooter(renderer.shadowRoot?.querySelector<HTMLElement>(".lyrics-footer") || null);
 
         if (clock.isReady()) renderer.currentTime = clock.read();

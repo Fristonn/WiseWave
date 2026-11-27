@@ -1,3 +1,4 @@
+// @ts-nocheck
 import {
   ReactiveElement,
   html,
@@ -6,8 +7,9 @@ import {
   property,
   state,
   query,
-} from "./renderCore.js";
-import { lyricStyles } from "./lyricStyles.js";
+  unsafeCSS,
+} from "./lyricsDomRuntime";
+import lyricsStyles from "./lyrics.css?raw";
 import { splitLyricGraphemes } from "./textSegments";
 const LYRIC_MANUAL_SCROLL_SETTLE_MS = 140;
 
@@ -481,7 +483,7 @@ class LyricsRuntime extends ReactiveElement {
       line.querySelectorAll(".shared-word-wipe").forEach((fragment) => {
         const target = fragment;
         target.style.transition = "none";
-        target.style.backgroundColor = "var(--lyplus-text-secondary)";
+        target.style.backgroundColor = "var(--lyrics-secondary-color)";
       }),
     );
     const started = performance.now();
@@ -2514,7 +2516,7 @@ class LyricsRuntime extends ReactiveElement {
         const wrap = line.querySelector(".background-vocal-wrap");
         if (wrap)
           line.style.setProperty(
-            "--am-lyrics-background-vocal-height",
+            "--lyrics-background-vocal-height",
             `${wrap.offsetHeight + 4}px`,
           );
       }
@@ -2947,6 +2949,7 @@ class LyricsRuntime extends ReactiveElement {
       backgroundEnd ?? line.timestamp,
       line.timestamp,
     );
+    if (line.followedBySectionCue) return rawEnd;
     const nextLine = this.lyrics[index + 1];
     if (!nextLine || nextLine.timestamp <= line.timestamp) {
       return rawEnd > line.timestamp ? rawEnd + 200 : rawEnd;
@@ -3006,7 +3009,7 @@ class LyricsRuntime extends ReactiveElement {
     if (exitLeadMs === undefined) {
       exitLeadMs = LyricsRuntime.getCssTimeMs(
         gap,
-        "--am-lyrics-instrumental-exit-duration",
+        "--lyrics-instrumental-exit-duration",
         GAP_EXIT_LEAD_MS,
       );
       this.gapExitDurationCache.set(gap, exitLeadMs);
@@ -3015,7 +3018,7 @@ class LyricsRuntime extends ReactiveElement {
     if (collapseLeadMs === undefined) {
       collapseLeadMs = LyricsRuntime.getCssTimeMs(
         gap,
-        "--am-lyrics-instrumental-collapse-duration",
+        "--lyrics-instrumental-collapse-duration",
         GAP_COLLAPSE_LEAD_MS,
       );
       this.gapCollapseDurationCache.set(gap, collapseLeadMs);
@@ -3308,8 +3311,8 @@ class LyricsRuntime extends ReactiveElement {
         : LyricsRuntime.getCssTimeMs(
             line,
             expanded
-              ? "--am-lyrics-background-vocal-enter-duration"
-              : "--am-lyrics-background-vocal-exit-duration",
+              ? "--lyrics-background-vocal-enter-duration"
+              : "--lyrics-background-vocal-exit-duration",
             BACKGROUND_TRANSITION_DURATION_MS,
           );
       const height = expanded ? wrap.offsetHeight + 4 : 0;
@@ -3327,7 +3330,7 @@ class LyricsRuntime extends ReactiveElement {
       this.backgroundAnimations.delete(line);
       if (expanded) {
         line.style.setProperty(
-          "--am-lyrics-background-vocal-height",
+          "--lyrics-background-vocal-height",
           `${height}px`,
         );
         this.backgroundExpandedLines.add(line);
@@ -4385,7 +4388,7 @@ class LyricsRuntime extends ReactiveElement {
     } of wipe.fragments) {
       LyricsRuntime.applyWipeShape(element, wipe.count, wipe.cjk);
       element.style.setProperty("--word-wipe-width", `${wipe.width}px`);
-      element.style.backgroundColor = "var(--lyplus-text-secondary)";
+      element.style.backgroundColor = "var(--lyrics-secondary-color)";
       element.style.backgroundSize = `calc(${wipe.width}px + var(--wipe-gradient-width, 0.75em)) 100%`;
       element.style.animation = "none";
       element.classList.add("shared-word-wipe");
@@ -4734,14 +4737,14 @@ class LyricsRuntime extends ReactiveElement {
     syllable.style.transition = "none";
     syllable.style.backgroundColor = syllable.classList.contains("has-chars")
       ? "transparent"
-      : "var(--lyplus-text-secondary)";
+      : "var(--lyrics-secondary-color)";
     const charSpans = syllable.querySelectorAll("span.char");
     for (let i = 0; i < charSpans.length; i += 1) {
       const el = charSpans[i];
       el.style.animation = "";
       LyricsRuntime.clearCharacterMotion(el);
       el.style.transition = "none";
-      el.style.backgroundColor = "var(--lyplus-text-secondary)";
+      el.style.backgroundColor = "var(--lyrics-secondary-color)";
       LyricsRuntime.clearPreWipeLead(el);
     }
     syllable.classList.remove(
@@ -4929,7 +4932,7 @@ class LyricsRuntime extends ReactiveElement {
                   (index - (count - 1) / 2) * 0.5 * 0.1 * emphasis * envelope;
                 return {
                   offset: frame / 60,
-                  transform: `translateX(calc(${x}em * var(--am-lyrics-lift))) scale(${1 + 0.1 * emphasis * envelope})`,
+                  transform: `translateX(calc(${x}em * var(--lyrics-lift))) scale(${1 + 0.1 * emphasis * envelope})`,
                 };
               },
             );
@@ -5531,7 +5534,7 @@ class LyricsRuntime extends ReactiveElement {
     `;
   }
 }
-LyricsRuntime.styles = lyricStyles;
+LyricsRuntime.styles = unsafeCSS(lyricsStyles);
 LyricsRuntime.lineSpringSamples = new Map();
 LyricsRuntime.wordWipes = new WeakMap();
 LyricsRuntime.wipeClocks = new WeakMap();

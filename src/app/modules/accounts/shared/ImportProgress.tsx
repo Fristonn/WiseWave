@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import { SpotifyAccount, YouTubeAccount, events } from "../../../mygo";
 import { useSnackbar } from "../../../shared/ui/Snackbar";
+import type { LibraryAddNotice } from "../../player/library/useLibrary";
 import { isMyGo } from "mygo-runtime";
 
 type Provider = "spotify" | "youtube";
-type ImportReport = { provider: Provider; phase: "start"; source: string } | { provider: Provider; phase: "complete"; matched: number; total: number } | { provider: Provider; phase: "error"; message: string };
+type ImportReport = { provider: Provider; phase: "start"; source: string } | { provider: Provider; phase: "complete"; matched: number; total: number; notice?: LibraryAddNotice } | { provider: Provider; phase: "error"; message: string };
 type ImportStatus = { phase: string; stage: string; source_id: string; done: number; total: number; matched: number; error: string };
 type Task = { key: string; source: string; done: number; total: number; matched: number; dismissed: boolean; finished: boolean };
 const importEvent = "wisewave-account-import";
@@ -54,6 +55,10 @@ export function AccountImportNotifications() {
       const task = tasks.current.get(value.provider);
       if (!task || task.finished) return;
       task.finished = true;
+      if (value.notice) {
+        show({ ...value.notice, key: task.key });
+        return;
+      }
       if (task.dismissed) return;
       show({ key: task.key, text: `imported ${value.matched} of ${value.total} songs from ${name(value.provider)}`, progress: 1, progressLabel: "import complete", accent: accent(value.provider), duration: 2500 });
     };
