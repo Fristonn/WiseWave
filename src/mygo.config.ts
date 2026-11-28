@@ -15,7 +15,6 @@ export default defineConfig({
   updates: {
     publicKey: "O/7SwqOR9Z8sn8xhp/YTzxtaA5oa2pAfNna+kZbOpAI=",
     github: "Fristonn/WiseWave",
-    tagPrefix: "update-v",
   },
   windows: {
     installerInclude: "resources/installer.nsh",

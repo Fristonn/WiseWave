@@ -72,7 +72,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish latest GitHub release
+      - name: Publish versioned GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           REPLACE_VERSION: ${{ inputs.replace_version }}
@@ -86,79 +86,71 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "GitHub release command failed: $($args[0..1] -join ' ')" }
           }
 
-          $tag = "latest"
+          function Set-AssetUrl($entry, $asset) {
+            $suffix = "/$($asset.Name)"
+            if ($entry.url -cne "$generatedBase$suffix" -or $entry.size -ne $asset.Length -or !$entry.signature) {
+              throw "Invalid update metadata for $($asset.Name)."
+            }
+            $entry.url = "$releaseBase$suffix"
+          }
+
           $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
           if ($versionSource -notmatch 'appVersion\s*=\s*"(\d+\.\d+\.\d+)"') { throw "Could not read app version." }
           $version = $Matches[1]
-          $updateTag = "update-v$version"
-          $latestTitle = gh release view $tag --json name --jq ".name"
-          if ($LASTEXITCODE -eq 0 -and $latestTitle -match '^WiseWave (\d+\.\d+\.\d+)$' -and
-              [version]$Matches[1] -gt [version]$version) {
-            throw "Cannot replace $latestTitle with an older version."
+          $latestTag = gh release view --json tagName --jq ".tagName"
+          if ($LASTEXITCODE -eq 0 -and $latestTag -match '^\d+\.\d+\.\d+$' -and [version]$latestTag -gt [version]$version) {
+            throw "Cannot replace $latestTag with an older version."
           }
+
+          $replace = ![string]::IsNullOrWhiteSpace($env:REPLACE_VERSION)
+          if ($replace -and ($env:GITHUB_REF -cne "refs/heads/main" -or $env:REPLACE_VERSION -cne $version -or $latestTag -cne $version)) {
+            throw "Replacement must match the build and the current Latest release."
+          }
+
+          $downloadBase = "https://github.com/$env:GITHUB_REPOSITORY/releases/download"
+          $generatedBase = "$downloadBase/v$version"
+          $releaseBase = "$downloadBase/$version"
           $patchNotes = $null
-          $installers = @()
-          $manifests = @()
-          $archives = @()
+          $assets = @()
           foreach ($architecture in @("amd64", "arm64")) {
             $dir = "dist/windows-$architecture"
             $installer = Get-Item -LiteralPath "$dir/wisewave-setup-$version-$architecture.exe"
             $manifest = Get-Item -LiteralPath "$dir/update-windows-$architecture.json"
             $metadata = Get-Content -LiteralPath $manifest.FullName -Raw | ConvertFrom-Json
             $archive = Get-Item -LiteralPath "$dir/wisewave-$version-windows-$architecture.tar.gz"
-            $expectedUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$updateTag/$($archive.Name)"
-            if ($metadata.version -ne $version -or $metadata.url -ne $expectedUrl -or $metadata.size -ne $archive.Length -or !$metadata.signature) {
-              throw "Invalid update manifest for $architecture."
-            }
+            if ($metadata.version -cne $version) { throw "Incorrect update version for $architecture." }
             if ([string]::IsNullOrWhiteSpace($metadata.notes) -or ($patchNotes -and $patchNotes -cne $metadata.notes)) {
               throw "Missing or inconsistent patch notes for $architecture."
             }
             $patchNotes = $metadata.notes
 
+            Set-AssetUrl $metadata $archive
+            foreach ($delta in $metadata.deltas) {
+              $name = "wisewave-$($delta.from)-to-$version-windows-$architecture.delta"
+              $asset = Get-Item -LiteralPath "$dir/$name"
+              Set-AssetUrl $delta $asset
+              $assets += $asset.FullName
+            }
+            [IO.File]::WriteAllText($manifest.FullName, ($metadata | ConvertTo-Json -Depth 20) + "`n")
+
             $stable = Join-Path $installer.DirectoryName "wisewave-setup-$architecture.exe"
             Copy-Item -LiteralPath $installer.FullName -Destination $stable -Force
-            $installers += $stable
-            $manifests += $manifest.FullName
-            $archives += $archive.FullName
-            $archives += @(Get-ChildItem -LiteralPath $dir -File -Filter "*.delta" | ForEach-Object FullName)
-          }
-
-          $replace = ![string]::IsNullOrWhiteSpace($env:REPLACE_VERSION)
-          if ($replace) {
-            if ($env:GITHUB_REF -cne "refs/heads/main" -or $env:REPLACE_VERSION -cne $version -or $latestTitle -cne "WiseWave $version") {
-              throw "Replacement must match the build and the current Latest release."
-            }
-            Invoke-GitHub release delete $updateTag --yes
-            Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$updateTag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
-          }
-
-          gh release view $updateTag --json tagName *> $null
-          if ($LASTEXITCODE -eq 0) {
-            $publishedCommit = Invoke-GitHub api "repos/$env:GITHUB_REPOSITORY/commits/$updateTag" --jq ".sha"
-            if ($publishedCommit -ne $env:GITHUB_SHA) { throw "$version already belongs to another commit." }
-            Invoke-GitHub release upload $updateTag --clobber -- @archives @manifests
-          } else {
-            Invoke-GitHub release create $updateTag --latest=false --target $env:GITHUB_SHA --title "WiseWave $version update files" --notes $patchNotes -- @archives @manifests
+            $assets += $stable, $manifest.FullName, $archive.FullName
           }
 
           $notes = "### what's new`n`n$patchNotes"
-          if ($replace) {
-            Invoke-GitHub release delete $tag --yes
-            Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
-          }
-          gh release view $tag --json tagName *> $null
-          if ($LASTEXITCODE -eq 0) {
-            Invoke-GitHub release upload $tag --clobber -- @installers
-            Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" -f "sha=$env:GITHUB_SHA" -F force=true --silent
-            Invoke-GitHub release edit $tag --latest --title "WiseWave $version" --notes $notes
+          $existingJson = gh release view $version --json isDraft,targetCommitish 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Invoke-GitHub release create $version --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @assets
           } else {
-            Invoke-GitHub release create $tag --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @installers
-          }
-
-          $publicNames = $installers | ForEach-Object { Split-Path -Leaf $_ }
-          $assetNames = Invoke-GitHub release view $tag --json assets --jq ".assets[].name"
-          foreach ($asset in $assetNames) {
-            if ($asset -notin $publicNames) {
-              Invoke-GitHub release delete-asset $tag $asset --yes
+            $existing = $existingJson | ConvertFrom-Json
+            $releaseCommit = if ($existing.isDraft) { $existing.targetCommitish } else {
+              Invoke-GitHub api "repos/$env:GITHUB_REPOSITORY/commits/$version" --jq ".sha"
             }
+            if ($releaseCommit -ne $env:GITHUB_SHA -and !$replace) { throw "$version already belongs to another commit." }
+            Invoke-GitHub release upload $version --clobber -- @assets
+            if ($releaseCommit -ne $env:GITHUB_SHA) {
+              Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$version" -f "sha=$env:GITHUB_SHA" -F force=true --silent
+            }
+            Invoke-GitHub release edit $version --draft=false --latest --title "WiseWave $version" --notes $notes
           }
