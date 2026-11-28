@@ -1,3 +1,9 @@
+## 0.2.4
+
+* drag either sidebar past its minimum width and hold to collapse it
+* long song titles and artist names scroll sooner in the for you popup
+* copy song links directly from the song menu
+
 ## 0.2.3
 
 * custom playlist artwork now shows on the playlist page

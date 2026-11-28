@@ -1081,6 +1081,21 @@ kbd {
   background: #ffffff33;
 }
 
+.resize-handle-collapsed {
+  padding: 0;
+  background: #ffffff1a;
+  cursor: pointer;
+}
+
+.resize-handle-collapsed:hover,
+.resize-handle-collapsed:focus-visible {
+  background: #ffffff33;
+}
+
+.library.snap-collapsed {
+  transition: width .3s ease-out;
+}
+
 /* scrolling titles */
 
 .player-marquee {
@@ -3869,7 +3884,7 @@ kbd {
   .connection-dropdown, .account-dropdown, .connection-ping, .connection-action-confirm, .connection-action-confirm-exit, .connection-action-return {
     animation: none;
   }
-  .connection-chevron, .feed-toggle svg, .now-playing, .app-content, .splash, .connection-action-content {
+  .connection-chevron, .feed-toggle svg, .library.snap-collapsed, .now-playing, .app-content, .splash, .connection-action-content {
     transition: none;
   }
   .connection-action-exit {

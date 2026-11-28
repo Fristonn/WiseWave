@@ -15,6 +15,8 @@ import { useSongMenu } from "../shared/SongMenu";
 import type { useMusic } from "./useMusic";
 import { progressStyleFromSettings, readProgressStyle, type ProgressStyle } from "./progressStyle";
 
+const mixMarqueeSpeed = 48;
+
 function time(value: number) {
   const seconds = Math.max(0, Math.floor(value));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -257,9 +259,9 @@ export function PlayerBar({
                             className="song-menu-title"
                             onContextMenu={(event) => openSongMenu(event, item)}
                           >
-                            <MarqueeText className="mix-popover-track-title">{item.title}</MarqueeText>
+                            <MarqueeText className="mix-popover-track-title" speed={mixMarqueeSpeed}>{item.title}</MarqueeText>
                           </span>
-                          <MarqueeText className="mix-popover-track-artist">{item.artist}</MarqueeText>
+                          <MarqueeText className="mix-popover-track-artist" speed={mixMarqueeSpeed}>{item.artist}</MarqueeText>
                         </span>
                         {(() => { const duration = trackDurationLabel(item, ""); return duration ? <span className="mix-popover-duration">{duration}</span> : null; })()}
                       </div>
