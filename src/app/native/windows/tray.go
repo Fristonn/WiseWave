@@ -1,16 +1,13 @@
 package windows
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/updater"
 )
 
 var TrayAction = mygo.NewEvent[string]("tray-action")
@@ -30,6 +27,7 @@ type TrayControl struct {
 	window             *mygo.Window
 	tray               *mygo.Tray
 	mini               *MiniWindow
+	updates            *installerUpdates
 	quitting           atomic.Bool
 	minimizeToTray     atomic.Bool
 	miniWhenMinimized  atomic.Bool
@@ -45,15 +43,16 @@ func (tray *TrayControl) SetWindowPreferences(minimizeToTray, miniWhenMinimized 
 
 func (tray *TrayControl) StartupEnabled() bool { return mygo.App.OpenAtLogin() }
 
-func (tray *TrayControl) CheckForUpdates() { updater.CheckForUpdates() }
+func (tray *TrayControl) CheckForUpdates() {
+	tray.updates.prompt(tray.window, true)
+}
 
 func (tray *TrayControl) UpdateStatus() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-	defer cancel()
-	update, err := mygo.Updater.Check(ctx)
-	switch {
-	case errors.Is(err, mygo.ErrUpdatesDisabled):
+	if !tray.updates.enabled() {
 		return "unavailable", nil
+	}
+	update, err := tray.updates.check()
+	switch {
 	case err != nil:
 		return "", err
 	case update != nil:

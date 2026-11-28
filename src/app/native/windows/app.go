@@ -7,7 +7,6 @@ import (
 	"runtime"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/updater"
 	spotifyaccount "wisewave-runtime/desktop/accounts/Spotify"
 	"wisewave-runtime/desktop/integrations"
 	"wisewave-runtime/desktop/player"
@@ -24,23 +23,6 @@ func Run(icon []byte) {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return
 	}
-	mygo.Use(updater.New(updater.Options{
-		Icon:     icon,
-		Language: "en",
-		Strings: map[string]updater.Strings{"en": {
-			Title: "updates", MenuItem: "check for updates", Checking: "checking for updates…",
-			Cancel: "cancel", OK: "OK", UpToDate: "you're up to date",
-			UpToDateMessage: "%s %s is already the latest version",
-			Unavailable:     "can't update here", UnavailableMessage: "%s can't update from the folder it's installed in",
-			DevelopmentBuild: "you can check for updates in the installed app",
-			Error:            "something went wrong with the update", CheckError: "couldn't check for updates", InstallError: "couldn't install the update",
-			Available: "there's a new version of %s", AvailableMessage: "%s %s is out, and you're on %s",
-			ReleaseNotes: "what's new", AutomaticDownloads: "download updates automatically",
-			Skip: "skip this version", RemindLater: "remind me later", Install: "install update",
-			Downloading: "downloading the update…", Installing: "installing the update…",
-			Ready: "ready to restart", ReadyMessage: "%s %s is ready to go", Later: "later", Relaunch: "restart now",
-		}},
-	}))
 	var engine *tokens.Engine
 	music := player.NewMusicWithTokens(func(ctx context.Context, videoID, visitor string) (string, string, error) {
 		if engine == nil {
@@ -49,7 +31,7 @@ func Run(icon []byte) {
 		return engine.Tokens(ctx, videoID, visitor)
 	})
 	mini := &MiniWindow{}
-	trayControl := &TrayControl{mini: mini}
+	trayControl := &TrayControl{mini: mini, updates: &installerUpdates{}}
 	caption := &CaptionControls{}
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		trayControl.quitting.Store(true)
@@ -110,6 +92,7 @@ func Run(icon []byte) {
 		})
 		window.SetWindowButtonsTheme(mygo.ThemeDark)
 		trayControl.window = window
+		go trayControl.updates.start(window)
 		caption.attach(window)
 		window.OnLeaveFullScreen(func() {
 			if trayControl.playerFullscreen {
@@ -163,5 +146,8 @@ func Run(icon []byte) {
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
+	}
+	if err := trayControl.updates.launch(); err != nil {
+		log.Printf("launch update installer: %v", err)
 	}
 }

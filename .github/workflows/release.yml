@@ -45,16 +45,10 @@ jobs:
         run: npm ci
 
       - name: Build Windows releases
-        env:
-          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         shell: pwsh
         run: |
-          if (-not $env:MYGO_UPDATER_PRIVATE_KEY) { throw "Missing MYGO_UPDATER_PRIVATE_KEY secret." }
           npx mygo build -platform windows/amd64,windows/arm64
           if ($LASTEXITCODE -ne 0) { throw "Build failed." }
-          foreach ($architecture in @("amd64", "arm64")) {
-            if (-not (Test-Path "dist/windows-$architecture/update-windows-$architecture.json")) { throw "Missing signed update for $architecture." }
-          }
 
       - name: Upload Windows amd64 build
         uses: actions/upload-artifact@v4
@@ -75,6 +69,7 @@ jobs:
       - name: Publish versioned GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
           REPLACE_VERSION: ${{ inputs.replace_version }}
         shell: pwsh
         run: |
@@ -84,14 +79,6 @@ jobs:
           function Invoke-GitHub {
             & gh @args
             if ($LASTEXITCODE -ne 0) { throw "GitHub release command failed: $($args[0..1] -join ' ')" }
-          }
-
-          function Set-AssetUrl($entry, $asset) {
-            $suffix = "/$($asset.Name)"
-            if ($entry.url -cne "$generatedBase$suffix" -or $entry.size -ne $asset.Length -or !$entry.signature) {
-              throw "Invalid update metadata for $($asset.Name)."
-            }
-            $entry.url = "$releaseBase$suffix"
           }
 
           $versionSource = Get-Content -LiteralPath "src/app/version.ts" -Raw
@@ -107,41 +94,22 @@ jobs:
             throw "Replacement must match the build and the current Latest release."
           }
 
-          $downloadBase = "https://github.com/$env:GITHUB_REPOSITORY/releases/download"
-          $generatedBase = "$downloadBase/v$version"
-          $releaseBase = "$downloadBase/$version"
-          $patchNotes = $null
           $assets = @()
           foreach ($architecture in @("amd64", "arm64")) {
             $dir = "dist/windows-$architecture"
             $installer = Get-Item -LiteralPath "$dir/wisewave-setup-$version-$architecture.exe"
-            $manifest = Get-Item -LiteralPath "$dir/update-windows-$architecture.json"
-            $metadata = Get-Content -LiteralPath $manifest.FullName -Raw | ConvertFrom-Json
-            $archive = Get-Item -LiteralPath "$dir/wisewave-$version-windows-$architecture.tar.gz"
-            if ($metadata.version -cne $version) { throw "Incorrect update version for $architecture." }
-            if ([string]::IsNullOrWhiteSpace($metadata.notes) -or ($patchNotes -and $patchNotes -cne $metadata.notes)) {
-              throw "Missing or inconsistent patch notes for $architecture."
-            }
-            $patchNotes = $metadata.notes
-
-            Set-AssetUrl $metadata $archive
-            foreach ($delta in $metadata.deltas) {
-              $name = "wisewave-$($delta.from)-to-$version-windows-$architecture.delta"
-              $asset = Get-Item -LiteralPath "$dir/$name"
-              Set-AssetUrl $delta $asset
-              $assets += $asset.FullName
-            }
-            [IO.File]::WriteAllText($manifest.FullName, ($metadata | ConvertTo-Json -Depth 20) + "`n")
-
             $stable = Join-Path $installer.DirectoryName "wisewave-setup-$architecture.exe"
             Copy-Item -LiteralPath $installer.FullName -Destination $stable -Force
-            $assets += $stable, $manifest.FullName, $archive.FullName
+            $assets += $stable
           }
 
-          $notes = "### what's new`n`n$patchNotes"
+          $notes = Join-Path $env:RUNNER_TEMP "wisewave-release-notes.md"
+          go run ./scripts/release-notes $version $assets[0] $assets[1] $notes
+          if ($LASTEXITCODE -ne 0) { throw "Could not sign the Windows release." }
+
           $existingJson = gh release view $version --json isDraft,targetCommitish 2>$null
           if ($LASTEXITCODE -ne 0) {
-            Invoke-GitHub release create $version --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes $notes -- @assets
+            Invoke-GitHub release create $version --latest --target $env:GITHUB_SHA --title "WiseWave $version" --notes-file $notes -- @assets
           } else {
             $existing = $existingJson | ConvertFrom-Json
             $releaseCommit = if ($existing.isDraft) { $existing.targetCommitish } else {
@@ -152,5 +120,12 @@ jobs:
             if ($releaseCommit -ne $env:GITHUB_SHA) {
               Invoke-GitHub api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$version" -f "sha=$env:GITHUB_SHA" -F force=true --silent
             }
-            Invoke-GitHub release edit $version --draft=false --latest --title "WiseWave $version" --notes $notes
+            Invoke-GitHub release edit $version --draft=false --latest --title "WiseWave $version" --notes-file $notes
+            $installerNames = $assets | ForEach-Object { Split-Path -Leaf $_ }
+            $assetNames = Invoke-GitHub release view $version --json assets --jq ".assets[].name"
+            foreach ($name in $assetNames) {
+              if ($name -notin $installerNames) {
+                Invoke-GitHub release delete-asset $version $name --yes
+              }
+            }
           }
